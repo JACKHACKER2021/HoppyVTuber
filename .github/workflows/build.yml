@@ -21,9 +21,9 @@ jobs:
         with:
           name: HoppyVTuber-apk
           path: app/build/outputs/apk/debug/app-debug.apk
-      - name: Create Release
+      - name: Create or Update Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0
-          name: Hoppy VTuber v1.0
+          tag_name: v1.0.${{ github.run_number }}
+          name: Hoppy VTuber v1.0 (Build ${{ github.run_number }})
           files: app/build/outputs/apk/debug/app-debug.apk
