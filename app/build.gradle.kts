@@ -10,15 +10,15 @@ android {
     compileSdk = 34
     defaultConfig {
         applicationId = "cz.hoppy.vtuber"
-        minSdk = 29
+        minSdk = 26
         targetSdk = 34
         versionCode = 2
         versionName = "1.0.1"
     }
     signingConfigs {
         getByName("debug") {
-            v1SigningEnabled = true
-            v2SigningEnabled = true
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
     buildTypes {
@@ -41,13 +41,13 @@ dependencies {
     implementation("io.github.sceneview:sceneview:2.2.1")
     implementation("com.google.mediapipe:tasks-vision:0.10.14")
     val camerax = "1.3.4"
-    implementation("androidx.camera:camera-core:$camerax")
-    implementation("androidx.camera:camera-camera2:$camerax")
-    implementation("androidx.camera:camera-lifecycle:$camerax")
-    implementation("androidx.camera:camera-view:$camerax")
+    implementation("androidx.camera:camera-core:")
+    implementation("androidx.camera:camera-camera2:")
+    implementation("androidx.camera:camera-lifecycle:")
+    implementation("androidx.camera:camera-view:")
 }
 
-// MediaPipe face model (3.6 MB) se stáhne automaticky při buildu
+// MediaPipe face model (3.6 MB) se stahne automaticky pri buildu
 val downloadFaceModel by tasks.registering {
     val out = file("src/main/assets/face_landmarker.task")
     outputs.file(out)
