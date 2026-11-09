@@ -8,13 +8,19 @@ plugins {
 android {
     namespace = "cz.hoppy.vtuber"
     compileSdk = 34
+
     defaultConfig {
         applicationId = "cz.hoppy.vtuber"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 10
+        versionName = "2.0.0"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
+
     signingConfigs {
         create("release") {
             storeFile = file("release.keystore")
@@ -27,26 +33,35 @@ android {
             enableV4Signing = false
         }
     }
+
     buildTypes {
-        getByName("release") {
+        release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
         }
-        getByName("debug") {
+        debug {
             signingConfig = signingConfigs.getByName("release")
         }
     }
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
-    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
-    androidResources { noCompress += listOf("glb", "task") }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    packaging {
+        resources {
+            excludes += listOf("META-INF/*.version", "META-INF/INDEX.LIST")
+        }
+    }
+
+    androidResources {
+        noCompress += listOf("glb", "task")
+    }
 }
 
 dependencies {
@@ -61,7 +76,7 @@ dependencies {
     implementation("androidx.camera:camera-view:1.3.4")
 }
 
-// MediaPipe face model (3.6 MB) se stahne automaticky pri buildu
+// MediaPipe face model (3.6 MB) se stáhne automaticky při buildu
 val downloadFaceModel by tasks.registering {
     val out = file("src/main/assets/face_landmarker.task")
     outputs.file(out)
