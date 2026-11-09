@@ -10,6 +10,7 @@
 
     <application
         android:allowBackup="true"
+        android:extractNativeLibs="true"
         android:label="Hoppy VTuber"
         android:theme="@style/Theme.Hoppy">
         <activity
