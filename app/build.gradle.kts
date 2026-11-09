@@ -12,18 +12,33 @@ android {
         applicationId = "cz.hoppy.vtuber"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
     }
     signingConfigs {
-        getByName("debug") {
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = "HoppyRelease2026!"
+            keyAlias = "hoppyvtuber"
+            keyPassword = "HoppyRelease2026!"
             enableV1Signing = true
             enableV2Signing = true
+            enableV3Signing = true
+            enableV4Signing = false
         }
     }
     buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+        }
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
     compileOptions {
