@@ -1,0 +1,19 @@
+<resources>
+    <style name="Theme.Hoppy" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">#5BD07A</item>
+        <item name="colorOnPrimary">#06240F</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Widget.Hoppy.Chip" parent="Widget.Material3.Chip.Filter">
+        <item name="chipBackgroundColor">@color/chip_bg</item>
+        <item name="android:textColor">@color/chip_text</item>
+        <item name="chipStrokeWidth">0dp</item>
+        <item name="checkedIconVisible">false</item>
+        <item name="chipCornerRadius">20dp</item>
+        <item name="chipMinHeight">44dp</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+</resources>
