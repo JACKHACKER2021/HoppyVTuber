@@ -13,17 +13,30 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: Ensure Release Keystore
+        run: |
+          if [ ! -f app/release.keystore ]; then
+            keytool -genkeypair -v -keystore app/release.keystore -alias hoppyvtuber \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "HoppyRelease2026!" -keypass "HoppyRelease2026!" \
+              -dname "CN=HoppyVTuber, OU=Hoppy, O=Hoppy, L=Prague, C=CZ"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add app/release.keystore
+            git commit -m "chore: persist release signing keystore [skip ci]" || true
+            git push || true
+          fi
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - run: gradle assembleDebug --no-daemon
+      - run: gradle assembleRelease --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: HoppyVTuber-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: HoppyVTuber-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
       - name: Create or Update Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Hoppy VTuber v1.0 (Build ${{ github.run_number }})
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/release/app-release.apk
