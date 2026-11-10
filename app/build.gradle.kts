@@ -13,8 +13,8 @@ android {
         applicationId = "cz.hoppy.vtuber"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "2.2.0"
+        versionCode = 14
+        versionName = "2.2.1"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -56,6 +56,9 @@ android {
     }
 
     packaging {
+        // nativní knihovny (Filament, MediaPipe) rozbalit při instalaci na disk – jinak se mapují
+        // přímo z APK a při aktualizaci/instalaci v jiném profilu (druhý prostor) padá SIGBUS
+        jniLibs { useLegacyPackaging = true }
         resources {
             excludes += listOf("META-INF/*.version", "META-INF/INDEX.LIST")
         }

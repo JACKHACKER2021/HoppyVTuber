@@ -61,7 +61,9 @@ class FaceTracker(private val context: Context) {
 
     private fun createLandmarker(): FaceLandmarker {
         val opts = FaceLandmarker.FaceLandmarkerOptions.builder()
-            .setBaseOptions(BaseOptions.builder().setModelAssetPath("face_landmarker.task").build())
+            // model v paměti (ne mapovaný přímo z APK – to padá SIGBUS, když se APK změní)
+            .setBaseOptions(BaseOptions.builder()
+                .setModelAssetBuffer(ModelBuffers.get(context, "face_landmarker.task")).build())
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setNumFaces(1)
             .setOutputFaceBlendshapes(true)
