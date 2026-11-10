@@ -224,6 +224,10 @@ class MainActivity : AppCompatActivity() {
             avatar.faceCam = c; avatar.saveExpressions(); reframe()
         }
         findViewById<Chip>(R.id.chipBubble).setOnClickListener { startBubble() }
+        findViewById<Chip>(R.id.chipBubble).setOnLongClickListener {
+            Prefs.get(this).edit().remove("bubbleX").remove("bubbleY").remove("padX").remove("padY").apply()
+            Toast.makeText(this, "Poloha bubliny vrácena na střed", Toast.LENGTH_SHORT).show(); true
+        }
         findViewById<Chip>(R.id.chipVoice).setOnClickListener {
             startActivity(Intent(this, VoiceActivity::class.java))
         }

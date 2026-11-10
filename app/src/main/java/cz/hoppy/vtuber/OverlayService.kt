@@ -71,7 +71,11 @@ class OverlayService : Service(), LifecycleOwner {
         override fun onDisplayAdded(id: Int) {}
         override fun onDisplayRemoved(id: Int) {}
         override fun onDisplayChanged(id: Int) {
-            if (id == Display.DEFAULT_DISPLAY) updateRotation()
+            if (id == Display.DEFAULT_DISPLAY) {
+                updateRotation()
+                // po otočení (hra na šířku) vrátit bublinu na obrazovku
+                if (root != null) { clampToScreen(); runCatching { wm.updateViewLayout(root, params) } }
+            }
         }
     }
 
@@ -88,6 +92,7 @@ class OverlayService : Service(), LifecycleOwner {
             return START_NOT_STICKY
         }
         if (root == null) try { showBubble() } catch (e: Exception) {
+            running = false
             CrashLog.note(this, "bublina start", e)
             android.widget.Toast.makeText(this, "Bublina se nespustila: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
             stopSelf()
@@ -167,13 +172,14 @@ class OverlayService : Service(), LifecycleOwner {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             // NOT_FOCUSABLE: klávesnice/tlačítka zůstávají hře
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = prefs.getInt("bubbleX", 24.dp)
             y = prefs.getInt("bubbleY", 120.dp)
         }
+        clampToScreen()
 
         sceneView.setOnTouchListener(DragListener())
         wm.addView(root, params)
@@ -184,6 +190,16 @@ class OverlayService : Service(), LifecycleOwner {
         getSystemService(DisplayManager::class.java).registerDisplayListener(displayListener, null)
         updateRotation()
         t.start(this)
+    }
+
+    /** Bublina vždy celá na obrazovce (aspoň kus, ať jde chytit). */
+    private fun clampToScreen() {
+        val dm = resources.displayMetrics
+        val (w, h) = sceneSize()
+        val maxX = (dm.widthPixels - w / 2).coerceAtLeast(0)
+        val maxY = (dm.heightPixels - h / 2).coerceAtLeast(0)
+        params.x = params.x.coerceIn(-w / 2, maxX)
+        params.y = params.y.coerceIn(0, maxY)
     }
 
     private fun updateRotation() {
@@ -209,6 +225,7 @@ class OverlayService : Service(), LifecycleOwner {
                     if (!dragging && (abs(dx) > slop || abs(dy) > slop)) dragging = true
                     if (dragging) {
                         params.x = startX + dx.toInt(); params.y = startY + dy.toInt()
+                        clampToScreen()
                         root?.let { wm.updateViewLayout(it, params) }
                     }
                 }
@@ -352,7 +369,7 @@ class OverlayService : Service(), LifecycleOwner {
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
