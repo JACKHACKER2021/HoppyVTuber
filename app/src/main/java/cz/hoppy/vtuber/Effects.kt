@@ -2,7 +2,6 @@ package cz.hoppy.vtuber
 
 import android.opengl.Matrix
 import io.github.sceneview.SceneView
-import io.github.sceneview.node.ModelNode
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -55,22 +54,28 @@ class Effects(private val sceneView: SceneView) {
     private val tm = engine.transformManager
     private val rnd = Random(7)
 
-    /** Fond instancí jednoho modelu. Neaktivní instance jsou zmenšené na nulu. */
+    /**
+     * Fond instancí jednoho modelu – čisté Filament entity (bez SceneView uzlů).
+     * Neaktivní instance nejsou ve scéně vůbec (žádné nulové měřítko).
+     */
     private inner class Pool(file: String, count: Int) {
         val roots: IntArray
         private var next = 0
         init {
             val list = runCatching { sceneView.modelLoader.createInstancedModel("models/props/$file.glb", count) }
+                .onFailure { android.util.Log.e("Effects", "rekvizita $file se nenačetla", it) }
                 .getOrDefault(emptyList())
             roots = IntArray(list.size)
             list.forEachIndexed { i, inst ->
-                sceneView.addChildNode(ModelNode(modelInstance = inst, autoAnimate = false))
                 roots[i] = inst.root
-                hide(inst.root)
+                entities[inst.root] = inst.entities
             }
         }
         fun take(): Int? { if (roots.isEmpty()) return null; val r = roots[next]; next = (next + 1) % roots.size; return r }
     }
+
+    private val entities = HashMap<Int, IntArray>()
+    private val shown = HashSet<Int>()
 
     private class Particle(
         val root: Int, val pos: FloatArray, val vel: FloatArray,
@@ -292,9 +297,13 @@ class Effects(private val sceneView: SceneView) {
     }
 
     // ------------------------------------------------------------- pomůcky
-    private fun set(root: Int, m: FloatArray) = tm.setTransform(tm.getInstance(root), m)
+    /** Nastaví polohu a zařadí do scény (když tam ještě není). */
+    private fun set(root: Int, m: FloatArray) {
+        tm.setTransform(tm.getInstance(root), m)
+        if (shown.add(root)) entities[root]?.let { sceneView.scene.addEntities(it) }
+    }
     private fun hide(root: Int) {
-        val m = FloatArray(16); Matrix.setIdentityM(m, 0); Matrix.scaleM(m, 0, 0f, 0f, 0f); set(root, m)
+        if (shown.remove(root)) entities[root]?.let { sceneView.scene.removeEntities(it) }
     }
     private fun scaleOf(m: FloatArray) = sqrt(m[0] * m[0] + m[1] * m[1] + m[2] * m[2])
     private fun ease(x: Float) = x.coerceIn(0f, 1f).let { it * it * (3 - 2 * it) }

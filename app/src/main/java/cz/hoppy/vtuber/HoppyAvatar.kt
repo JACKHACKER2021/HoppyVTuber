@@ -231,7 +231,8 @@ class HoppyAvatar(
         pose.reset()
         val headW = FloatArray(16)
         bones["Head"]?.let { tm.getWorldTransform(tm.getInstance(it.entity), headW) }
-        effects.update(t, dt, headW, pose)
+        try { effects.update(t, dt, headW, pose) }
+        catch (e: Exception) { CrashLog.note(sceneView.context, "efekt", e); effects.stop(); pose.reset() }
 
         // --- 1) animace z modelu: vše na výchozí pózu, pak Idle, Wave / Happy prolnuté
         for ((_, b) in bones) tm.setTransform(tm.getInstance(b.entity), b.base)

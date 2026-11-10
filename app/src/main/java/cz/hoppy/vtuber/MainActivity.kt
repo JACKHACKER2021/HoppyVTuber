@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         // záběr přepočítat při každé změně velikosti (panel dole zakrývá část obrazovky)
         sceneView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> reframe() }
         setupButtons()
+        CrashLog.showIfAny(this)
         avatar.setBackdrop(CustomBg.load(this))
 
         val perms = mutableListOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
@@ -93,8 +94,8 @@ class MainActivity : AppCompatActivity() {
         permLauncher.launch(perms.toTypedArray())
 
         sceneView.onFrame = {
-            avatar.update()
-            updateStatus()
+            try { avatar.update(); updateStatus() }
+            catch (e: Exception) { CrashLog.note(this, "snímek", e) }
         }
 
         ScreenRecordService.onFinished = { uri ->

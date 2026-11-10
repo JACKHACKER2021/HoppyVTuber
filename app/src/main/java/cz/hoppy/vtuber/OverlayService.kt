@@ -87,7 +87,11 @@ class OverlayService : Service(), LifecycleOwner {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (root == null) showBubble()
+        if (root == null) try { showBubble() } catch (e: Exception) {
+            CrashLog.note(this, "bublina start", e)
+            android.widget.Toast.makeText(this, "Bublina se nespustila: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            stopSelf()
+        }
         return START_NOT_STICKY
     }
 
@@ -140,7 +144,10 @@ class OverlayService : Service(), LifecycleOwner {
         bgIndex = prefs.getInt("bgIndex", 0)
         setBackground(bgIndex)
         a.setBackdrop(CustomBg.load(this))
-        sceneView.onFrame = { a.update(); updateVoiceTag(); if (pad != null && a.effects.active != lastFx) { lastFx = a.effects.active; refreshPad() } }
+        sceneView.onFrame = {
+            try { a.update(); updateVoiceTag(); if (pad != null && a.effects.active != lastFx) { lastFx = a.effects.active; refreshPad() } }
+            catch (e: Exception) { CrashLog.note(this, "bublina snímek", e) }
+        }
         sceneView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> a.applyFraming() }
 
         controls = buildControls()

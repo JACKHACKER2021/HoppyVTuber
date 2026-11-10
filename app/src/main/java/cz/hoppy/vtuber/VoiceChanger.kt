@@ -92,7 +92,9 @@ class VoiceChanger(private val context: Context) {
     private fun loop() {
         val fx = fx(context)
         val rec = try { newRecorder() } catch (e: Exception) { status = "Mikrofon nejde otevřít"; running = false; return }
-        val track = newTrack()
+        val track = try { newTrack() } catch (e: Exception) {
+            rec.release(); status = "Přehrávání nejde spustit"; running = false; return
+        }
         val buf = ShortArray(BLOCK)
         try {
             rec.startRecording(); track.play()
