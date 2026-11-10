@@ -69,11 +69,13 @@
         android:layout_height="wrap_content"
         android:layout_gravity="top|center_horizontal"
         android:layout_marginTop="24dp"
-        android:background="#CC000000"
+        android:background="@drawable/rec_badge"
         android:paddingHorizontal="14dp"
         android:paddingVertical="6dp"
-        android:text="● REC · klepni na postavu pro ovládání"
-        android:textColor="#FF5555"
+        android:text="🔴 REC  00:00"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:fontFeatureSettings="tnum"
         android:textSize="13sp"
         android:visibility="gone" />
 

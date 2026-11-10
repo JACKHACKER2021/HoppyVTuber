@@ -5,7 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.media.projection.MediaProjectionManager
+import android.content.ContentValues
+import android.media.MediaRecorder
+import android.os.SystemClock
+import android.provider.MediaStore
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -60,16 +63,6 @@ class MainActivity : AppCompatActivity() {
         else Toast.makeText(this, "Bez povolení „Zobrazovat přes jiné aplikace“ bublina nepůjde", Toast.LENGTH_LONG).show()
     }
 
-    private val projectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        if (r.resultCode == RESULT_OK && r.data != null) {
-            val i = Intent(this, ScreenRecordService::class.java)
-                .setAction(ScreenRecordService.ACTION_START)
-                .putExtra(ScreenRecordService.EXTRA_CODE, r.resultCode)
-                .putExtra(ScreenRecordService.EXTRA_DATA, r.data)
-            ContextCompat.startForegroundService(this, i)
-            setRecordingUi(true)
-        }
-    }
 
     private var ready = false
 
@@ -108,12 +101,6 @@ class MainActivity : AppCompatActivity() {
             catch (e: Exception) { CrashLog.note(this, "snímek", e) }
         }
 
-        ScreenRecordService.onFinished = { uri ->
-            runOnUiThread {
-                setRecordingUi(false)
-                Toast.makeText(this, if (uri != null) "Uloženo do Movies/HoppyVTuber" else "Nahrávání selhalo", Toast.LENGTH_LONG).show()
-            }
-        }
         ready = true
         if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) resumeApp()
     }
@@ -139,7 +126,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        if (ready) stopVoice()
+        if (ready) { stopVoice(); if (recording) stopSceneRecording() }
         super.onStop()
     }
 
@@ -194,7 +181,7 @@ class MainActivity : AppCompatActivity() {
     private fun reframe() {
         val panel = findViewById<View>(R.id.panel)
         val h = sceneView.height
-        val cover = if (h > 0 && panel.visibility == View.VISIBLE) (h - panel.top).toFloat() / h else 0f
+        val cover = if (h > 0 && panel.visibility == View.VISIBLE && !recording) (h - panel.top).toFloat() / h else 0f
         avatar.applyFraming(cover.coerceIn(0f, 0.5f))
     }
 
@@ -249,13 +236,6 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<ExtendedFloatingActionButton>(R.id.btnRec).setOnClickListener { toggleRecording() }
         // klepnutí na postavu během nahrávání schová/ukáže panel
-        sceneView.setOnClickListener {
-            if (recording) {
-                val p = findViewById<View>(R.id.panel)
-                p.visibility = if (p.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                sceneView.post { reframe() }
-            }
-        }
     }
 
     /** Výrazy mohla změnit bublina – promítnout je do čipů. */
@@ -299,13 +279,77 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------------------------------------------------------- nahrávání
-    private fun toggleRecording() {
-        if (!recording) {
-            val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            projectionLauncher.launch(mpm.createScreenCaptureIntent())
-        } else {
-            startService(Intent(this, ScreenRecordService::class.java).setAction(ScreenRecordService.ACTION_STOP))
+    // ---------------------------------------------------------------- nahrávání
+    // Nahrává se přímo 3D scéna (ne celá obrazovka) – tlačítka jsou vidět a fungují, ale ve videu nejsou.
+    private var recorder: MediaRecorder? = null
+    private var recUri: android.net.Uri? = null
+    private var recPfd: android.os.ParcelFileDescriptor? = null
+    private var recStart = 0L
+    private val recTick = object : Runnable {
+        override fun run() {
+            if (!recording) return
+            val sec = (SystemClock.elapsedRealtime() - recStart) / 1000
+            findViewById<TextView>(R.id.recBadge).text = "🔴 REC  %02d:%02d".format(sec / 60, sec % 60)
+            sceneView.postDelayed(this, 500)
         }
+    }
+
+    private fun toggleRecording() { if (recording) stopSceneRecording() else startSceneRecording() }
+
+    private fun startSceneRecording() {
+        // video = velikost scény, max 1080 na šířku, sudé rozměry (kodek)
+        val k = minOf(1f, 1080f / sceneView.width.coerceAtLeast(1))
+        val w = ((sceneView.width * k).toInt() / 2) * 2
+        val h = ((sceneView.height * k).toInt() / 2) * 2
+        if (w < 16 || h < 16) return
+        val withAudio = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        try {
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, "hoppy_${System.currentTimeMillis()}.mp4")
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/HoppyVTuber")
+            }
+            val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)!!
+            val pfd = contentResolver.openFileDescriptor(uri, "w")!!
+            val r = (if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()).apply {
+                if (withAudio) setAudioSource(MediaRecorder.AudioSource.MIC)
+                setVideoSource(MediaRecorder.VideoSource.SURFACE)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setOutputFile(pfd.fileDescriptor)
+                setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+                setVideoSize(w, h)
+                setVideoFrameRate(30)
+                setVideoEncodingBitRate(8_000_000)
+                if (withAudio) {
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    setAudioEncodingBitRate(128_000); setAudioSamplingRate(44100)
+                }
+                prepare()
+                start()
+            }
+            sceneView.startMirroring(r.surface, 0, 0, w, h)
+            recorder = r; recUri = uri; recPfd = pfd
+            recStart = SystemClock.elapsedRealtime()
+            setRecordingUi(true)
+        } catch (e: Exception) {
+            CrashLog.note(this, "nahrávání start", e)
+            Toast.makeText(this, "Nahrávání nejde spustit: ${e.message}", Toast.LENGTH_LONG).show()
+            recorder?.release(); recorder = null
+            recUri?.let { runCatching { contentResolver.delete(it, null, null) } }; recUri = null
+        }
+    }
+
+    private fun stopSceneRecording() {
+        val r = recorder ?: return
+        recorder = null
+        runCatching { sceneView.stopMirroring(r.surface) }
+        val ok = runCatching { r.stop() }.isSuccess
+        r.release()
+        runCatching { recPfd?.close() }; recPfd = null
+        if (!ok) recUri?.let { runCatching { contentResolver.delete(it, null, null) } }
+        recUri = null
+        setRecordingUi(false)
+        Toast.makeText(this, if (ok) "Uloženo do Movies/HoppyVTuber" else "Nahrávání selhalo", Toast.LENGTH_LONG).show()
     }
 
     private fun setRecordingUi(on: Boolean) {
@@ -314,10 +358,8 @@ class MainActivity : AppCompatActivity() {
             text = if (on) "■  Zastavit nahrávání" else "●  Nahrát video"
         }
         findViewById<View>(R.id.recBadge).visibility = if (on) View.VISIBLE else View.GONE
-        // během nahrávání schováme vše kromě postavy, ať to není ve videu
-        findViewById<View>(R.id.camCard).alpha = if (on) 0f else 1f
-        findViewById<View>(R.id.topBar).alpha = if (on) 0f else 1f
-        findViewById<View>(R.id.panel).visibility = if (on) View.GONE else View.VISIBLE
+        if (on) recTick.run()
+        // tlačítka zůstávají – do videa se nedostanou (nahrává se jen 3D scéna)
         sceneView.post { reframe() }
     }
 

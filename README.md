@@ -2,7 +2,7 @@
 
 Přední kamera → MediaPipe Face Landmarker → hlava, oči a pusa postavy v reálném čase.
 Spodní panel: 🙌 Ruce, 👋 Mávat, 😊 Radost, 😳 Blush, 🎨 Pozadí (levandule / chroma-green pro OBS / tmavé / bílé), 🎯 Kalibrovat a velké tlačítko Nahrát video (MP4 do Movies/HoppyVTuber, se zvukem z mikrofonu).
-Při nahrávání se schová panel i náhled kamery. Klepnutím na postavu panel zase ukážeš.
+Nahrává se jen 3D scéna s postavou: tlačítka (emoce, efekty…) zůstávají na obrazovce a fungují, ale ve videu nejsou. Nahoře běží 🔴 REC s časem.
 
 ## 👤 Facecam a obličej
 - **👤 Facecam** (výchozí): kamera ukazuje hlavu s ušima a ramena. Vypnutím uvidíš celou postavu. Záběr se sám přizpůsobí velikosti okna i panelu.
