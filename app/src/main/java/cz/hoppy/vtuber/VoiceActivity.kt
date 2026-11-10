@@ -25,8 +25,8 @@ import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 
 /**
- * Nastavení hlasu: API klíč ElevenLabs, výběr hlasu, posuvníky a TEST
- * (nahraj se -> poslechni originál -> poslechni Hoppy hlasem).
+ * Nastavení hlasu: výběr hlasu z ElevenLabs (jen ukázka), automatické napodobení
+ * (výška + barva), ruční doladění a test (originál vs. Hoppy hlas).
  */
 class VoiceActivity : AppCompatActivity() {
 
@@ -44,9 +44,10 @@ class VoiceActivity : AppCompatActivity() {
 
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).toInt()
 
+    private val sliders = HashMap<String, Pair<SeekBar, (Float) -> Int>>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "Hlas Hoppy"
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(20.dp, 32.dp, 20.dp, 32.dp)
@@ -56,13 +57,14 @@ class VoiceActivity : AppCompatActivity() {
             addView(col)
         })
 
-        col.addView(header("🎙️ Hlas Hoppy (ElevenLabs)"))
-        col.addView(note("Mluvíš ty – tvoje slova, tvoje intonace – ale ozve se vybraný hlas. " +
-                "Žádné MP3 ani text, převádí se tvůj živý hlas (Speech-to-Speech). " +
-                "Zpoždění je asi 1–2 s po každé větě. Použij sluchátka."))
+        col.addView(header("🎙️ Hlas Hoppy"))
+        col.addView(note("Mluvíš ty a slyšíš se hned (bez zpoždění, bez internetu, bez kreditů) – jen jiným hlasem. " +
+                "Z ElevenLabs se vezme jen krátká ukázka vybraného hlasu a aplikace podle ní nastaví výšku a barvu. " +
+                "Používej sluchátka, jinak bude pískat zpětná vazba."))
 
-        // --- API klíč
-        col.addView(label("API klíč (elevenlabs.io → Profile → API Keys)"))
+        // --- ElevenLabs jako knihovna hlasů
+        col.addView(header("1️⃣ Vyber hlas z ElevenLabs"))
+        col.addView(label("API klíč (jen pro seznam hlasů – nic se negeneruje)"))
         val keyField = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             setText(prefs.getString("elKey", ""))
@@ -74,44 +76,43 @@ class VoiceActivity : AppCompatActivity() {
             prefs.edit().putString("elKey", keyField.text.toString().trim()).apply()
             loadVoices()
         })
-
-        // --- výběr hlasu
-        col.addView(label("Hlas"))
         spinner = Spinner(this)
         col.addView(spinner)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
                 voices.getOrNull(pos)?.let {
-                    prefs.edit().putString("elVoiceId", it.id).putString("elVoiceName", it.name).apply()
+                    prefs.edit().putString("elVoiceId", it.id).putString("elVoiceName", it.name)
+                        .putString("elPreview", it.previewUrl).apply()
                 }
             }
             override fun onNothingSelected(p: AdapterView<*>?) {}
         }
         prefs.getString("elVoiceName", null)?.let { name ->
-            voices = listOf(ElevenLabs.Voice(prefs.getString("elVoiceId", "")!!, name))
+            voices = listOf(ElevenLabs.Voice(prefs.getString("elVoiceId", "")!!, name, prefs.getString("elPreview", "")!!))
             spinner.adapter = adapter(voices.map { it.name })
         }
+        col.addView(button("▶ Poslechnout ukázku hlasu") { playPreview() })
 
-        // --- posuvníky
-        col.addView(slider("Stabilita (víc = klidnější, míň = emotivnější)", "elStability", 0.5f))
-        col.addView(slider("Podobnost hlasu (víc = věrnější originálu hlasu)", "elSimilarity", 0.75f))
-        col.addView(slider("Styl / přehánění (0 = nejrychlejší)", "elStyle", 0f))
-        col.addView(slider("Citlivost mikrofonu (kdy začne poslouchat)", "voiceSens", 0.5f))
-        col.addView(switch("Odstranit šum v pozadí", "elNoise", true))
-        col.addView(switch("✅ Měnič hlasu zapnutý (v aplikaci i v bublině)", "voiceOn", false))
-
-        // --- test
-        col.addView(header("🧪 Test nastavení"))
+        // --- nahrání sebe a napodobení
+        col.addView(header("2️⃣ Nahraj sebe a napodob hlas"))
         meter = View(this).apply { setBackgroundColor(Color.parseColor("#5BD07A")) }
         col.addView(LinearLayout(this).apply {
             setBackgroundColor(Color.parseColor("#2A303C"))
             addView(meter, LinearLayout.LayoutParams(0, 10.dp))
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 10.dp).apply { topMargin = 8.dp })
-        col.addView(button("⏺ Nahrát 5 s") { recordTest() })
-        col.addView(button("▶ Přehrát můj originál") { playOriginal() })
-        col.addView(button("🐰 Přehrát Hoppy hlasem") { playConverted() })
+        col.addView(button("⏺ Nahrát 5 s (mluv normálně)") { recordTest() })
+        col.addView(button("🎯 Napodobit vybraný hlas") { matchVoice() })
         status = note("").also { it.setTextColor(Color.parseColor("#FFB74D")) }
         col.addView(status)
+
+        // --- ruční doladění
+        col.addView(header("3️⃣ Dolaď a vyzkoušej"))
+        col.addView(slider("Výška hlasu", "voicePitch", 0f, -12f, 12f) { "%+.1f půltónu".format(it) })
+        col.addView(slider("Barva (tmavší ↔ jasnější)", "voiceTone", 0f, -1f, 1f) { "%+.0f %%".format(it * 100) })
+        col.addView(slider("Citlivost mikrofonu", "voiceSens", 0.6f, 0f, 1f) { "${(it * 100).toInt()} %" })
+        col.addView(button("▶ Přehrát můj originál") { playTest(false) })
+        col.addView(button("🐰 Přehrát s hlasem Hoppy") { playTest(true) })
+        col.addView(switch("✅ Měnič hlasu zapnutý (v aplikaci i v bublině)", "voiceOn", false))
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             micPerm.launch(Manifest.permission.RECORD_AUDIO)
@@ -136,6 +137,29 @@ class VoiceActivity : AppCompatActivity() {
         }.start()
     }
 
+    private fun previewFile(): java.io.File {
+        val url = prefs.getString("elPreview", "").orEmpty()
+        val id = prefs.getString("elVoiceId", "").orEmpty()
+        if (url.isBlank()) throw java.io.IOException("Nejdřív načti a vyber hlas")
+        return ElevenLabs.downloadPreview(url, cacheDir, id)
+    }
+
+    private fun playPreview() {
+        setStatus("Stahuji ukázku…")
+        Thread {
+            try {
+                val f = previewFile()
+                runOnUiThread {
+                    android.media.MediaPlayer().apply {
+                        setDataSource(f.path); setOnCompletionListener { it.release() }
+                        prepare(); start()
+                    }
+                    setStatus("▶ ${prefs.getString("elVoiceName", "")}")
+                }
+            } catch (e: Exception) { setStatus(e.message ?: "Chyba") }
+        }.start()
+    }
+
     private fun recordTest() {
         if (busy) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -146,9 +170,9 @@ class VoiceActivity : AppCompatActivity() {
         Thread {
             val rec = VoiceChanger.newRecorder()
             val out = ByteArrayOutputStream()
-            val buf = ShortArray(320)
-            val thr = VoiceChanger.threshold(this)
+            val buf = ShortArray(480)
             var heard = false
+            val thr = VoiceChanger.threshold(this)
             try {
                 rec.startRecording()
                 val end = System.currentTimeMillis() + 5000
@@ -156,50 +180,57 @@ class VoiceActivity : AppCompatActivity() {
                     val n = rec.read(buf, 0, buf.size)
                     if (n <= 0) continue
                     val r = VoiceChanger.rms(buf, n)
-                    if (r > thr) heard = true
+                    if (r > thr * 2) heard = true
                     showLevel(r / 0.1f)
                     for (i in 0 until n) { val v = buf[i].toInt(); out.write(v and 0xFF); out.write((v shr 8) and 0xFF) }
                 }
             } finally { runCatching { rec.stop() }; rec.release(); showLevel(0f) }
             testPcm = out.toByteArray()
             busy = false
-            setStatus(if (heard) "Nahráno ✔ – zkus přehrát" else "Skoro nic jsem neslyšel – zvyš citlivost nebo mluv hlasitěji")
+            setStatus(if (heard) "Nahráno ✔ – teď 🎯 Napodobit nebo ▶ Přehrát" else "Skoro nic jsem neslyšel – mluv hlasitěji")
         }.start()
     }
 
-    private fun playOriginal() {
-        val pcm = testPcm ?: run { toast("Nejdřív nahraj test"); return }
-        if (busy) return
-        busy = true
+    private fun matchVoice() {
+        val pcm = testPcm ?: run { toast("Nejdřív se nahraj (5 s)"); return }
+        setStatus("Analyzuji tvůj hlas a ukázku…")
         Thread {
-            val t = VoiceChanger.newTrack(); t.play()
-            pcm.toList().chunked(3200).forEach { c ->
-                val b = c.toByteArray(); VoiceChanger.play(t, b, b.size) { showLevel(it) }
-            }
-            runCatching { t.stop() }; t.release(); showLevel(0f); busy = false
-        }.start()
-    }
-
-    private fun playConverted() {
-        val pcm = testPcm ?: run { toast("Nejdřív nahraj test"); return }
-        if (!VoiceChanger.isConfigured(this)) { toast("Zadej klíč a vyber hlas"); return }
-        if (busy) return
-        busy = true
-        setStatus("Převádím…")
-        val key = prefs.getString("elKey", "").orEmpty()
-        val voice = prefs.getString("elVoiceId", "").orEmpty()
-        val s = VoiceChanger.settings(this)
-        Thread {
-            val t = VoiceChanger.newTrack(); t.play()
-            val started = System.currentTimeMillis()
-            var first = 0L
             try {
-                ElevenLabs.convert(key, voice, pcm, s) { b, len ->
-                    if (first == 0L) first = System.currentTimeMillis() - started
-                    VoiceChanger.play(t, b, len) { showLevel(it) }
-                }
-                setStatus("Hotovo ✔ (první zvuk za ${first} ms)")
+                val mine = VoiceFx.shortsToFloats(pcm)
+                val myHz = VoiceFx.pitchHz(mine, VoiceChanger.RATE)
+                    ?: throw Exception("V nahrávce není dost hlasu – nahraj se znovu")
+                val (target, tRate) = VoiceFx.decode(previewFile())
+                val tHz = VoiceFx.pitchHz(target, tRate) ?: throw Exception("Z ukázky nejde zjistit výšku hlasu")
+                val (semis, tone) = VoiceFx.match(myHz, tHz,
+                    VoiceFx.brightness(mine, VoiceChanger.RATE), VoiceFx.brightness(target, tRate))
+                prefs.edit().putFloat("voicePitch", semis).putFloat("voiceTone", tone).apply()
+                runOnUiThread { refreshSlider("voicePitch", semis); refreshSlider("voiceTone", tone) }
+                setStatus("Tvůj hlas ${myHz.toInt()} Hz → ${prefs.getString("elVoiceName", "")} ${tHz.toInt()} Hz\n" +
+                        "Nastaveno: %+.1f půltónu, barva %+.0f %%. Zkus 🐰 Přehrát.".format(semis, tone * 100))
             } catch (e: Exception) { setStatus(e.message ?: "Chyba") }
+        }.start()
+    }
+
+    private fun playTest(withFx: Boolean) {
+        val pcm = testPcm ?: run { toast("Nejdřív se nahraj (5 s)"); return }
+        if (busy) return
+        busy = true
+        Thread {
+            val t = VoiceChanger.newTrack(lowLatency = false); t.play()
+            val fx = VoiceChanger.fx(this)
+            val shorts = ShortArray(pcm.size / 2) {
+                ((pcm[2 * it + 1].toInt() shl 8) or (pcm[2 * it].toInt() and 0xFF)).toShort()
+            }
+            var i = 0
+            val block = ShortArray(480)
+            while (i < shorts.size) {
+                val n = minOf(480, shorts.size - i)
+                System.arraycopy(shorts, i, block, 0, n)
+                val l = if (withFx) fx.process(block, n) else VoiceChanger.rms(block, n) * 6
+                showLevel(l)
+                t.write(block, 0, n)
+                i += n
+            }
             runCatching { t.stop() }; t.release(); showLevel(0f); busy = false
         }.start()
     }
@@ -232,23 +263,30 @@ class VoiceActivity : AppCompatActivity() {
             .apply { topMargin = 8.dp }
     }
 
-    private fun slider(title: String, key: String, def: Float): View {
+    private fun slider(title: String, key: String, def: Float, min: Float, max: Float, fmt: (Float) -> String): View {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val lbl = label("")
-        fun upd(v: Float) { lbl.text = "$title: ${(v * 100).toInt()} %" }
+        val toProg = { v: Float -> (((v - min) / (max - min)) * 100).toInt() }
+        fun upd(v: Float) { lbl.text = "$title: ${fmt(v)}" }
         val v0 = prefs.getFloat(key, def); upd(v0)
         val sb = SeekBar(this).apply {
-            max = 100; progress = (v0 * 100).toInt()
+            this.max = 100; progress = toProg(v0)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    upd(p / 100f); prefs.edit().putFloat(key, p / 100f).apply()
+                    val v = min + (max - min) * p / 100f
+                    upd(v); if (fromUser) prefs.edit().putFloat(key, v).apply()
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) {}
             })
         }
+        sliders[key] = sb to toProg
         box.addView(lbl); box.addView(sb)
         return box
+    }
+
+    private fun refreshSlider(key: String, v: Float) {
+        sliders[key]?.let { (sb, toProg) -> sb.progress = toProg(v) }
     }
 
     private fun switch(title: String, key: String, def: Boolean) = SwitchCompat(this).apply {
@@ -257,9 +295,6 @@ class VoiceActivity : AppCompatActivity() {
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, 12.dp, 0, 12.dp)
         setOnCheckedChangeListener { _, c ->
-            if (key == "voiceOn" && c && !VoiceChanger.isConfigured(this@VoiceActivity)) {
-                isChecked = false; toast("Nejdřív zadej klíč a vyber hlas"); return@setOnCheckedChangeListener
-            }
             prefs.edit().putBoolean(key, c).apply()
         }
     }

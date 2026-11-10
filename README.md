@@ -10,15 +10,15 @@ Při nahrávání se schová panel i náhled kamery. Klepnutím na postavu panel
 - **Úsměv**: velký úsměv = šťastné zavřené oči (jako 😊 Radost).
 - **Mrkání** a **😳 Blush** (na tvářích pod očima).
 
-## 🎙️ Hlas Hoppy (ElevenLabs)
-Měnič hlasu: **mluvíš ty** (tvoje slova i intonace), ale ozve se **hlas z ElevenLabs**. Žádné MP3 ani psaní textu – převádí se tvůj živý hlas (Speech-to-Speech, model `eleven_multilingual_sts_v2`, umí česky).
-1. Tlačítko **🎙️ Hlas** → vlož API klíč (elevenlabs.io → Profile → API Keys) → **Uložit klíč a načíst hlasy**.
-2. Vyber hlas (i klonovaný nebo z Voice Library – stačí ho mít v účtu).
-3. Posuvníky: stabilita, podobnost, styl, citlivost mikrofonu, odstranění šumu.
-4. **🧪 Test**: Nahrát 5 s → Přehrát originál → Přehrát Hoppy hlasem (ukáže i zpoždění).
-5. Zapni **Měnič hlasu** – běží v aplikaci i v bublině (tlačítko 🎙 v mini panelu). Pusa postavy se hýbe podle Hoppy hlasu.
+## 🎙️ Hlas Hoppy (měnič hlasu v telefonu)
+**Mluvíš ty a slyšíš se hned**, jen jiným hlasem. Hlas se mění přímo v telefonu: nic se negeneruje, neposílá na internet a nespotřebovává kredity.
+ElevenLabs slouží jen jako **knihovna hlasů**: aplikace stáhne krátkou veřejnou ukázku vybraného hlasu a podle ní nastaví výšku a barvu tvého hlasu.
+1. **🎙️ Hlas** → vlož API klíč (jen pro seznam hlasů) → **Načíst hlasy** → vyber hlas → **▶ Poslechnout ukázku**.
+2. **⏺ Nahrát 5 s** (mluv normálně) → **🎯 Napodobit vybraný hlas**: spočítá výšku (Hz) tvou i cílovou a nastaví posuvníky.
+3. Dolaď **Výšku** (půltóny) a **Barvu** → **▶ originál** vs. **🐰 Hoppy hlas**.
+4. Zapni **Měnič hlasu**: běží v aplikaci i v bublině (🎙 v mini panelu). Pusa se hýbe podle hlasu.
 
-Jak to funguje: aplikace pozná, kdy domluvíš větu (ticho ~0,65 s), pošle ji do ElevenLabs a přehraje výsledek. Zpoždění je proto ~1–2 s po větě. Používej **sluchátka**, jinak mikrofon slyší přehrávaný hlas. Spotřebovává kredity ElevenLabs (podle délky řeči). Klíč je uložený jen v telefonu.
+⚠️ Používej **sluchátka**, jinak reproduktor pískne zpětnou vazbou. Měnič mění výšku a barvu hlasu. Úplně stejný hlas jako ElevenLabs (klon) bez generování v cloudu udělat nejde.
 
 ## 🫧 Bublina – Hoppy nad hrou
 Tlačítko **🫧 Bublina** pošle postavu do malého plovoucího okna nad ostatní aplikace (hry, YouTube…).
