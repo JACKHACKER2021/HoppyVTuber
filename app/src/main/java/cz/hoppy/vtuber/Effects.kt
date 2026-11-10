@@ -188,14 +188,14 @@ class Effects(private val sceneView: SceneView) {
                 when {
                     u < 0.6f -> { p.pitch = 8f; p.roll = sin(u * 40f) * 3f; p.mouth = 0f; p.squint = 0.6f }
                     u < 2.6f -> {
-                        p.pitch = 25f; p.mouth = 1f; p.roll = sin(u * 25f) * 2f
+                        p.pitch = 15f; p.mouth = 1f; p.roll = sin(u * 25f) * 2f
                         every(u, 0.03f) {
                             spawn(vomit, head, rnd.f(-0.02f, 0.02f), 0.04f, 0.17f,
                                 vx = rnd.f(-0.12f, 0.12f), vy = rnd.f(-0.25f, 0f), vz = rnd.f(0.4f, 0.65f),
-                                gravity = 1.8f, drag = 0.2f, life = 1.2f, size = rnd.f(0.7f, 1.4f), grow = 0.3f)
+                                gravity = 1.8f, drag = 0.2f, life = 1.2f, size = rnd.f(1.1f, 1.8f), grow = 0.3f)
                         }
                     }
-                    else -> { p.pitch = lerp(25f, 0f, (u - 2.6f) / 0.6f); p.mouth = 0f }
+                    else -> { p.pitch = lerp(15f, 0f, (u - 2.6f) / 0.6f); p.mouth = 0f }
                 }
             }
             Fx.LOVED -> {

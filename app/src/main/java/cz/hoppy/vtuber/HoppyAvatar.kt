@@ -260,9 +260,10 @@ class HoppyAvatar(
         spring(earRoll, (-vRoll - vYaw * 0.5f) * EAR_FLOP * 0.05f, dt)
         spring(earPitch, (vPitch * EAR_FLOP * 0.05f) + pose.lift * 300f, dt)
         earRoll[0] = earRoll[0].coerceIn(-35f, 35f); earPitch[0] = earPitch[0].coerceIn(-40f, 40f)
-        val droop = pose.earDroop * 28f
-        addRot("LeftEar", earPitch[0] + droop * 0.5f, 0f, earRoll[0] - droop)
-        addRot("RightEar", earPitch[0] + droop * 0.5f, 0f, earRoll[0] + droop)
+        // svěšené uši: dozadu a jen trochu do stran
+        val droop = pose.earDroop
+        addRot("LeftEar", earPitch[0] - 24f * droop, 0f, earRoll[0] - 10f * droop)
+        addRot("RightEar", earPitch[0] - 24f * droop, 0f, earRoll[0] + 10f * droop)
         val wagSpeed = 6f + 6f * max(0f, pose.wag) - 3f * max(0f, -pose.wag)
         val wagAmp = TAIL_WAG * (1f + 1.5f * max(0f, pose.wag) - 0.6f * max(0f, -pose.wag))
         spring(tailSwing, -vYaw * 0.08f, dt, 40f, 5f)
@@ -286,7 +287,7 @@ class HoppyAvatar(
         }
         closedEyes = eyes == Eyes.CLOSED
         val openEyes = eyes == Eyes.AUTO || eyes == Eyes.WIDE
-        val es = if (eyes == Eyes.WIDE) 1.15f else 1f
+        val es = 1f
         face("Face_EyeLeft", openEyes, es, es * pose.squint, EYE_CX, EYE_CY)
         face("Face_EyeRight", openEyes, es, es * pose.squint, -EYE_CX, EYE_CY)
         when (eyes) {

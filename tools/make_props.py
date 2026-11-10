@@ -137,7 +137,7 @@ if __name__ == "__main__":
     write_glb("carrot", [(carrot, (1.0, 0.5, 0.08, 1))] + [(l, (0.25, 0.7, 0.2, 1)) for l in leaves])
     write_glb("drop_blood", [(sphere(0.011, 1.25, 0.85), (0.75, 0.02, 0.05, 1))])
     write_glb("drop_sweat", [(sphere(0.016, 1.3, 0.85), (0.55, 0.85, 1.0, 0.85))])
-    write_glb("blob_vomit", [(sphere(0.016, 0.85), (0.55, 0.78, 0.15, 1))])
+    write_glb("blob_vomit", [(sphere(0.016, 0.85), (0.62, 0.55, 0.05, 1))])
     write_glb("crumb", [(sphere(0.007, 0.8, 0, 6, 4), (1.0, 0.55, 0.1, 1))])
     write_glb("puff", [(sphere(0.013, 1.0, 0, 8, 6), (0.92, 0.97, 1.0, 0.8))])
     # teploměr: tyčinka podél +Z (ven z pusy), červená baňka na konci
