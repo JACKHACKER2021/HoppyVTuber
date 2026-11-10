@@ -32,11 +32,8 @@ import io.github.sceneview.SceneView
  */
 class MainActivity : AppCompatActivity() {
 
-    // pozadí: levandule, chroma-green (pro OBS), tmavé, bílé
-    private val BACKGROUNDS = arrayOf(
-        floatArrayOf(0.965f, 0.953f, 0.988f), floatArrayOf(0f, 0.69f, 0.25f),
-        floatArrayOf(0.08f, 0.09f, 0.12f), floatArrayOf(1f, 1f, 1f)
-    )
+    private val BACKGROUNDS = Prefs.BACKGROUNDS
+    private var voice: VoiceChanger? = null
     private var bgIndex = 0
     private var skybox: Skybox? = null
     private var faceShown = false
@@ -75,7 +72,7 @@ class MainActivity : AppCompatActivity() {
         sceneView = findViewById(R.id.sceneView)
         applyInsets()
 
-        setBackground(0)
+        setBackground(Prefs.get(this).getInt("bgIndex", 0))
         sceneView.cameraManipulator = null      // dotyk neotáčí kamerou, záběr řídí Facecam
         tracker = FaceTracker(this)
         avatar = HoppyAvatar(sceneView, tracker)
@@ -111,6 +108,29 @@ class MainActivity : AppCompatActivity() {
             startTracking()
         }
         syncChips()
+        // chvilku počkat, ať bublina stihne pustit mikrofon
+        sceneView.postDelayed({
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) startVoice()
+        }, 400)
+    }
+
+    override fun onStop() {
+        stopVoice()
+        super.onStop()
+    }
+
+    private fun startVoice() {
+        stopVoice()
+        if (!Prefs.get(this).getBoolean("voiceOn", false) || !VoiceChanger.isConfigured(this)) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        val v = VoiceChanger(this).also { voice = it }
+        avatar.voiceLevel = { v.level }
+        v.start()
+    }
+
+    private fun stopVoice() {
+        voice?.stop(); voice = null
+        if (::avatar.isInitialized) avatar.voiceLevel = { 0f }
     }
 
     private fun startTracking() {
@@ -139,6 +159,7 @@ class MainActivity : AppCompatActivity() {
     private fun setBackground(i: Int) {
         val engine = sceneView.engine
         bgIndex = i % BACKGROUNDS.size
+        Prefs.get(this).edit().putInt("bgIndex", bgIndex).apply()
         val c = BACKGROUNDS[bgIndex]
         val old = skybox
         skybox = Skybox.Builder().color(c[0], c[1], c[2], 1f).build(engine)
@@ -183,6 +204,9 @@ class MainActivity : AppCompatActivity() {
             avatar.faceCam = c; avatar.saveExpressions(); reframe()
         }
         findViewById<Chip>(R.id.chipBubble).setOnClickListener { startBubble() }
+        findViewById<Chip>(R.id.chipVoice).setOnClickListener {
+            startActivity(Intent(this, VoiceActivity::class.java))
+        }
         findViewById<ExtendedFloatingActionButton>(R.id.btnRec).setOnClickListener { toggleRecording() }
         // klepnutí na postavu během nahrávání schová/ukáže panel
         sceneView.setOnClickListener {

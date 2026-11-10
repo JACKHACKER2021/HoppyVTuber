@@ -46,6 +46,9 @@ class HoppyAvatar(
     /** true = jen hlava a ramena (facecam), false = celá postava */
     var faceCam = true
 
+    /** Hlasitost Hoppy hlasu z měniče (0..1) – když mluví ElevenLabs hlas, hýbe se pusa podle něj. */
+    var voiceLevel: () -> Float = { 0f }
+
     // výrazy / gesta (přepínají tlačítka)
     var armsOn = false
     var waveOn = false
@@ -183,7 +186,7 @@ class HoppyAvatar(
         sYaw = lerp(sYaw, tracker.yaw - tracker.offYaw, 0.35f)
         sPitch = lerp(sPitch, tracker.pitch - tracker.offPitch, 0.35f)
         sRoll = lerp(sRoll, tracker.roll - tracker.offRoll, 0.35f)
-        sJaw = lerp(sJaw, tracker.jaw, 0.5f)
+        sJaw = lerp(sJaw, max(tracker.jaw, voiceLevel() * 0.6f), 0.5f)
 
         val m = if (MIRROR) -1f else 1f
         setRot("Head", PITCH_SIGN * sPitch, m * YAW_SIGN * sYaw, m * ROLL_SIGN * sRoll)

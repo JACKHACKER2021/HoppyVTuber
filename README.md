@@ -10,11 +10,21 @@ Při nahrávání se schová panel i náhled kamery. Klepnutím na postavu panel
 - **Úsměv**: velký úsměv = šťastné zavřené oči (jako 😊 Radost).
 - **Mrkání** a **😳 Blush** (na tvářích pod očima).
 
+## 🎙️ Hlas Hoppy (ElevenLabs)
+Měnič hlasu: **mluvíš ty** (tvoje slova i intonace), ale ozve se **hlas z ElevenLabs**. Žádné MP3 ani psaní textu – převádí se tvůj živý hlas (Speech-to-Speech, model `eleven_multilingual_sts_v2`, umí česky).
+1. Tlačítko **🎙️ Hlas** → vlož API klíč (elevenlabs.io → Profile → API Keys) → **Uložit klíč a načíst hlasy**.
+2. Vyber hlas (i klonovaný nebo z Voice Library – stačí ho mít v účtu).
+3. Posuvníky: stabilita, podobnost, styl, citlivost mikrofonu, odstranění šumu.
+4. **🧪 Test**: Nahrát 5 s → Přehrát originál → Přehrát Hoppy hlasem (ukáže i zpoždění).
+5. Zapni **Měnič hlasu** – běží v aplikaci i v bublině (tlačítko 🎙 v mini panelu). Pusa postavy se hýbe podle Hoppy hlasu.
+
+Jak to funguje: aplikace pozná, kdy domluvíš větu (ticho ~0,65 s), pošle ji do ElevenLabs a přehraje výsledek. Zpoždění je proto ~1–2 s po větě. Používej **sluchátka**, jinak mikrofon slyší přehrávaný hlas. Spotřebovává kredity ElevenLabs (podle délky řeči). Klíč je uložený jen v telefonu.
+
 ## 🫧 Bublina – Hoppy nad hrou
 Tlačítko **🫧 Bublina** pošle postavu do malého plovoucího okna nad ostatní aplikace (hry, YouTube…).
-Kamera dál sleduje obličej (běží jako služba s notifikací), pozadí bubliny je průhledné.
+Kamera dál sleduje obličej (běží jako služba s notifikací). Hoppy je v **okýnku** s rámečkem a pozadím – ve Facecam je okýnko čtvercové, takže kolem není prázdné místo.
 - Poprvé Android požádá o povolení **Zobrazovat přes jiné aplikace**.
-- **Táhni** bublinu kamkoli, **klepni** na ni → mini panel: 👋 mávat, 😊 radost, 😳 blush, 👤 facecam, 🎯 kalibrovat, ⤢ velikost (S/M/L), ✕ zavřít.
+- **Táhni** bublinu kamkoli, **klepni** na ni → mini panel: 👋 mávat, 😊 radost, 😳 blush, 👤 facecam, 🎙 měnič hlasu, 🎨 pozadí okýnka, 🎯 kalibrovat, ⤢ velikost (S/M/L), ✕ zavřít.
 - Funguje i na šířku (tracking se otáčí s displejem).
 - Návrat do aplikace (nebo klepnutí na notifikaci) bublinu zavře a postava se vrátí do aplikace.
 - Poloha, velikost, výrazy i kalibrace se pamatují.

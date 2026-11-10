@@ -22,6 +22,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.ServiceCompat
@@ -44,8 +45,9 @@ class OverlayService : Service(), LifecycleOwner {
         @Volatile var running = false
             private set
 
-        // velikosti bubliny (šířka v dp, výška = 1.25×)
-        private val SIZES_DP = intArrayOf(120, 170, 230)
+        // velikosti okýnka (šířka v dp); facecam = čtverec, celá postava = 3:5
+        private val SIZES_DP = intArrayOf(120, 160, 210)
+        private const val BORDER_DP = 3
     }
 
     private val registry = LifecycleRegistry(this)
@@ -56,6 +58,11 @@ class OverlayService : Service(), LifecycleOwner {
     private lateinit var params: WindowManager.LayoutParams
     private lateinit var sceneView: SceneView
     private lateinit var controls: LinearLayout
+    private lateinit var frame: FrameLayout
+    private lateinit var voiceTag: TextView
+    private var voice: VoiceChanger? = null
+    private var bgIndex = 0
+    private var mySkybox: com.google.android.filament.Skybox? = null
     private var tracker: FaceTracker? = null
     private var avatar: HoppyAvatar? = null
     private var sizeIndex = 1
@@ -103,9 +110,13 @@ class OverlayService : Service(), LifecycleOwner {
             .addAction(Notification.Action.Builder(null as Icon?, "Zavřít bublinu", stop).build())
             .setOngoing(true)
             .build()
-        val type = if (Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0
+        var type = if (Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0
+        if (Build.VERSION.SDK_INT >= 30 && hasMic()) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         ServiceCompat.startForeground(this, 2, n, type)
     }
+
+    private fun hasMic() = checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
 
     // ------------------------------------------------------------------ bublina
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).toInt()
@@ -119,16 +130,16 @@ class OverlayService : Service(), LifecycleOwner {
 
         sceneView = SceneView(
             context = this,
-            isOpaque = false,                // průhledné pozadí – vidíš hru za postavou
             cameraManipulator = null,        // tahání = přesun bubliny, ne otáčení kamery
             sharedLifecycle = registry,
         )
-        sceneView.scene.skybox = null
+        bgIndex = prefs.getInt("bgIndex", 0)
+        setBackground(bgIndex)
 
         val t = FaceTracker(this).also { tracker = it }
         val a = HoppyAvatar(sceneView, t).also { avatar = it }
         a.loadExpressions()
-        sceneView.onFrame = { a.update() }
+        sceneView.onFrame = { a.update(); updateVoiceTag() }
         sceneView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> a.applyFraming() }
 
         controls = buildControls()
@@ -137,7 +148,7 @@ class OverlayService : Service(), LifecycleOwner {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            addView(sceneView, LinearLayout.LayoutParams(SIZES_DP[sizeIndex].dp, (SIZES_DP[sizeIndex] * 1.25f).toInt().dp))
+            addView(buildFrame())
             addView(controls, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = 4.dp })
@@ -158,6 +169,7 @@ class OverlayService : Service(), LifecycleOwner {
 
         sceneView.setOnTouchListener(DragListener())
         wm.addView(root, params)
+        if (prefs.getBoolean("voiceOn", false)) startVoice()
 
         // teprve teď "resumed": SceneView začne kreslit a kamera se spustí
         registry.currentState = Lifecycle.State.RESUMED
@@ -237,7 +249,14 @@ class OverlayService : Service(), LifecycleOwner {
         button("👋", { a.waveOn }) { a.waveOn = !a.waveOn; if (a.waveOn) a.armsOn = false }
         button("😊", { a.happyOn }) { a.happyOn = !a.happyOn }
         button("😳", { a.blushOn }) { a.blushOn = !a.blushOn }
-        button("👤", { a.faceCam }) { a.faceCam = !a.faceCam; a.applyFraming() }
+        button("👤", { a.faceCam }) { a.faceCam = !a.faceCam; resizeFrame() }
+        button("🎙", { voice != null }) {
+            val on = voice == null
+            if (on && !VoiceChanger.isConfigured(this)) return@button
+            Prefs.get(this).edit().putBoolean("voiceOn", on).apply()
+            if (on) startVoice() else stopVoice()
+        }
+        button("🎨", null) { setBackground(bgIndex + 1) }
         button("🎯", null) { tracker?.calibrate() }
         button("⤢", null) { cycleSize() }
         button("✕", null) { stopSelf() }
@@ -247,16 +266,94 @@ class OverlayService : Service(), LifecycleOwner {
     private fun cycleSize() {
         sizeIndex = (sizeIndex + 1) % SIZES_DP.size
         Prefs.get(this).edit().putInt("bubbleSize", sizeIndex).apply()
-        sceneView.layoutParams = sceneView.layoutParams.apply {
-            width = SIZES_DP[sizeIndex].dp
-            height = (SIZES_DP[sizeIndex] * 1.25f).toInt().dp
+        resizeFrame()
+    }
+
+    // ------------------------------------------------------------- okýnko
+    /** Velikost scény: facecam = čtverec (žádný prázdný prostor kolem), celá postava = na výšku. */
+    private fun sceneSize(): Pair<Int, Int> {
+        val w = SIZES_DP[sizeIndex].dp
+        val faceCam = avatar?.faceCam ?: true
+        return w to (if (faceCam) w else (w * 1.6f).toInt())
+    }
+
+    /** Okýnko = rámeček s pozadím + jmenovka; scéna je neprůhledná, takže nikde nic neprosvítá. */
+    private fun buildFrame(): FrameLayout {
+        val (w, h) = sceneSize()
+        frame = FrameLayout(this).apply {
+            setPadding(BORDER_DP.dp, BORDER_DP.dp, BORDER_DP.dp, BORDER_DP.dp)
+            background = GradientDrawable().apply {
+                cornerRadius = 10.dp.toFloat()
+                setColor(Color.parseColor("#5BD07A"))
+            }
         }
+        frame.addView(sceneView, FrameLayout.LayoutParams(w, h))
+        val tagBg = GradientDrawable().apply { cornerRadius = 8.dp.toFloat(); setColor(Color.parseColor("#B3141820")) }
+        frame.addView(TextView(this).apply {
+            text = "Hoppy"; textSize = 10f; setTextColor(Color.WHITE)
+            setPadding(6.dp, 1.dp, 6.dp, 1.dp); background = tagBg
+        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.START).apply { setMargins(4.dp, 0, 0, 4.dp) })
+        voiceTag = TextView(this).apply {
+            textSize = 10f; setTextColor(Color.WHITE)
+            setPadding(6.dp, 1.dp, 6.dp, 1.dp); background = tagBg; visibility = View.GONE
+        }
+        frame.addView(voiceTag, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.END).apply { setMargins(0, 4.dp, 4.dp, 0) })
+        return frame
+    }
+
+    private fun resizeFrame() {
+        val (w, h) = sceneSize()
+        sceneView.layoutParams = (sceneView.layoutParams as FrameLayout.LayoutParams).apply { width = w; height = h }
         root?.let { wm.updateViewLayout(it, params) }
+    }
+
+    private fun setBackground(i: Int) {
+        bgIndex = i % Prefs.BACKGROUNDS.size
+        Prefs.get(this).edit().putInt("bgIndex", bgIndex).apply()
+        val c = Prefs.BACKGROUNDS[bgIndex]
+        val engine = sceneView.engine
+        val old = mySkybox      // výchozí skybox SceneView neničíme, uklidí si ho sama
+        mySkybox = com.google.android.filament.Skybox.Builder().color(c[0], c[1], c[2], 1f).build(engine)
+        sceneView.scene.skybox = mySkybox
+        old?.let { runCatching { engine.destroySkybox(it) } }
+    }
+
+    // ------------------------------------------------------------- hlas
+    private fun startVoice() {
+        stopVoice()
+        if (!hasMic() || !VoiceChanger.isConfigured(this)) return
+        val v = VoiceChanger(this).also { voice = it }
+        avatar?.voiceLevel = { v.level }
+        v.start()
+    }
+
+    private fun stopVoice() {
+        voice?.stop(); voice = null
+        avatar?.voiceLevel = { 0f }
+    }
+
+    private var lastTag = ""
+    private fun updateVoiceTag() {
+        val v = voice
+        val t = when {
+            v == null -> ""
+            v.status == "převádím…" -> "🎙 …"
+            v.level > 0.02f -> "🔊"
+            v.status == "poslouchám" -> "🎙"
+            else -> "⚠"
+        }
+        if (t != lastTag) {
+            lastTag = t
+            voiceTag.text = t; voiceTag.visibility = if (t.isEmpty()) View.GONE else View.VISIBLE
+        }
     }
 
     override fun onDestroy() {
         running = false
         runCatching { getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener) }
+        stopVoice()
         tracker?.close()
         if (registry.currentState != Lifecycle.State.INITIALIZED) {
             registry.currentState = Lifecycle.State.DESTROYED   // SceneView se uklidí sama
