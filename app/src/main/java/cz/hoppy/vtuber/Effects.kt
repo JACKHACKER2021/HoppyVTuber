@@ -62,7 +62,7 @@ class Effects(private val sceneView: SceneView) {
         val roots: IntArray
         private var next = 0
         init {
-            val list = runCatching { sceneView.modelLoader.createInstancedModel("models/props/$file.glb", count) }
+            val list = runCatching { sceneView.modelLoader.createInstancedModel(ModelBuffers.get(sceneView.context, "models/props/$file.glb"), count) }
                 .onFailure { android.util.Log.e("Effects", "rekvizita $file se nenačetla", it) }
                 .getOrDefault(emptyList())
             roots = IntArray(list.size)

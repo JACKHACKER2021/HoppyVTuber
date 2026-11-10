@@ -71,8 +71,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var ready = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (OverlayService.running) {
+            // nejdřív zavřít bublinu a počkat, až zmizí její 3D engine (jen jeden engine naráz)
+            startService(Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_STOP))
+            android.os.Handler(mainLooper).postDelayed({ if (!isFinishing && !isDestroyed) build() }, 700)
+        } else build()
+    }
+
+    private fun build() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
         sceneView = findViewById(R.id.sceneView)
@@ -104,10 +114,16 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, if (uri != null) "Uloženo do Movies/HoppyVTuber" else "Nahrávání selhalo", Toast.LENGTH_LONG).show()
             }
         }
+        ready = true
+        if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) resumeApp()
     }
 
     override fun onStart() {
         super.onStart()
+        if (ready) resumeApp()
+    }
+
+    private fun resumeApp() {
         // návrat do aplikace = bublina se zavře a postava se vrátí sem
         if (OverlayService.running) {
             startService(Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_STOP))
@@ -123,7 +139,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        stopVoice()
+        if (ready) stopVoice()
         super.onStop()
     }
 
@@ -277,7 +293,8 @@ class MainActivity : AppCompatActivity() {
         tracker.stop()                     // kameru převezme bublina
         avatar.saveExpressions()
         ContextCompat.startForegroundService(this, Intent(this, OverlayService::class.java))
-        moveTaskToBack(true)               // pryč z cesty – spusť si hru
+        // aplikaci zavřeme úplně: jen jeden 3D engine naráz (dva najednou na některých GPU padají)
+        finish()
         Toast.makeText(this, "Hoppy je v bublině – táhni ji, klepnutím ovládání", Toast.LENGTH_LONG).show()
     }
 
@@ -305,7 +322,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        tracker.close()
+        if (ready) tracker.close()
         super.onDestroy()
     }
 }

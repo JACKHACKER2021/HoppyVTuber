@@ -91,11 +91,19 @@ class OverlayService : Service(), LifecycleOwner {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (root == null) try { showBubble() } catch (e: Exception) {
-            running = false
-            CrashLog.note(this, "bublina start", e)
-            android.widget.Toast.makeText(this, "Bublina se nespustila: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-            stopSelf()
+        if (root == null && !starting) {
+            starting = true; running = true
+            // počkat, až aplikace uklidí svůj 3D engine (jen jeden engine naráz)
+            android.os.Handler(mainLooper).postDelayed({
+                starting = false
+                if (stopped) return@postDelayed
+                try { showBubble() } catch (e: Exception) {
+                    running = false
+                    CrashLog.note(this, "bublina start", e)
+                    android.widget.Toast.makeText(this, "Bublina se nespustila: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    stopSelf()
+                }
+            }, 800)
         }
         return START_NOT_STICKY
     }
@@ -453,7 +461,11 @@ class OverlayService : Service(), LifecycleOwner {
         }
     }
 
+    private var starting = false
+    private var stopped = false
+
     override fun onDestroy() {
+        stopped = true
         running = false
         runCatching { getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener) }
         stopVoice()

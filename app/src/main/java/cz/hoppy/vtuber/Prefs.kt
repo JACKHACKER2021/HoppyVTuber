@@ -36,3 +36,21 @@ object CustomBg {
     fun load(c: android.content.Context): android.graphics.Bitmap? =
         if (isOn(c)) runCatching { android.graphics.BitmapFactory.decodeFile(file(c).path) }.getOrNull() else null
 }
+
+/**
+ * Modely načtené do přímé (direct) paměti, která žije po celou dobu běhu aplikace.
+ * Filament čte data modelu i později na GPU vlákně – kdyby paměť mezitím uvolnil
+ * garbage collector, spadne to nativně (SIGBUS). Proto je držíme tady napořád.
+ */
+object ModelBuffers {
+    private val cache = HashMap<String, java.nio.ByteBuffer>()
+
+    @Synchronized
+    fun get(c: android.content.Context, path: String): java.nio.ByteBuffer {
+        val b = cache.getOrPut(path) {
+            val bytes = c.assets.open(path).use { it.readBytes() }
+            java.nio.ByteBuffer.allocateDirect(bytes.size).order(java.nio.ByteOrder.nativeOrder()).apply { put(bytes); flip() }
+        }
+        return b.duplicate()   // stejná paměť, vlastní pozice
+    }
+}

@@ -109,7 +109,7 @@ class HoppyAvatar(
     }
 
     private fun load(modelUnits: Float) {
-        val instance = sceneView.modelLoader.createModelInstance("models/hoppy.glb")
+        val instance = sceneView.modelLoader.createModelInstance(ModelBuffers.get(sceneView.context, "models/hoppy.glb"))
         val node = ModelNode(
             modelInstance = instance,
             autoAnimate = false,                 // animace řídíme sami
