@@ -4,11 +4,17 @@ Přední kamera → MediaPipe Face Landmarker → hlava, oči a pusa postavy v r
 Spodní panel: 🙌 Ruce, 👋 Mávat, 😊 Radost, 😳 Blush, 🎨 Pozadí (levandule / chroma-green pro OBS / tmavé / bílé), 🎯 Kalibrovat a velké tlačítko Nahrát video (MP4 do Movies/HoppyVTuber, se zvukem z mikrofonu).
 Při nahrávání se schová panel i náhled kamery. Klepnutím na postavu panel zase ukážeš.
 
+## 👤 Facecam a obličej
+- **👤 Facecam** (výchozí): kamera ukazuje hlavu s ušima a ramena. Vypnutím uvidíš celou postavu. Záběr se sám přizpůsobí velikosti okna i panelu.
+- **Mluvení**: když otevřeš pusu, Hoppy otevře pusu taky – čím víc otevřeš, tím víc.
+- **Úsměv**: velký úsměv = šťastné zavřené oči (jako 😊 Radost).
+- **Mrkání** a **😳 Blush** (na tvářích pod očima).
+
 ## 🫧 Bublina – Hoppy nad hrou
 Tlačítko **🫧 Bublina** pošle postavu do malého plovoucího okna nad ostatní aplikace (hry, YouTube…).
 Kamera dál sleduje obličej (běží jako služba s notifikací), pozadí bubliny je průhledné.
 - Poprvé Android požádá o povolení **Zobrazovat přes jiné aplikace**.
-- **Táhni** bublinu kamkoli, **klepni** na ni → mini panel: 👋 mávat, 😊 radost, 😳 blush, 🎯 kalibrovat, ⤢ velikost (S/M/L), ✕ zavřít.
+- **Táhni** bublinu kamkoli, **klepni** na ni → mini panel: 👋 mávat, 😊 radost, 😳 blush, 👤 facecam, 🎯 kalibrovat, ⤢ velikost (S/M/L), ✕ zavřít.
 - Funguje i na šířku (tracking se otáčí s displejem).
 - Návrat do aplikace (nebo klepnutí na notifikaci) bublinu zavře a postava se vrátí do aplikace.
 - Poloha, velikost, výrazy i kalibrace se pamatují.
@@ -22,8 +28,8 @@ Kamera dál sleduje obličej (běží jako služba s notifikací), pozadí bubli
 
 ## Ladění
 - `HoppyAvatar.kt` (nahoře): `MIRROR`, `YAW_SIGN`, `PITCH_SIGN`, `ROLL_SIGN` – když se postava otáčí na opačnou stranu; `MODEL_UNITS` – velikost postavy; `ARM_DEG` – jak vysoko jdou ruce (120° = čisté V).
-- `MainActivity.kt`: `CAM_Z` – vzdálenost kamery (větší = postava menší).
-- `OverlayService.kt`: `SIZES_DP` – velikosti bubliny, `BUBBLE_CAM` – záběr kamery v bublině.
+- `HoppyAvatar.kt`: `MOUTH_OPEN` / `MOUTH_CLOSE` – citlivost pusy při mluvení, `SMILE_HAPPY` – jak velký úsměv zavře oči do „happy“, `BLUSH_X/Y/SCALE` – poloha a velikost blush, `applyFraming()` – záběr Facecam / celá postava.
+- `OverlayService.kt`: `SIZES_DP` – velikosti bubliny.
 
 ## Struktura kódu
 - `FaceTracker.kt` – přední kamera + MediaPipe → natočení hlavy, mrkání, pusa.

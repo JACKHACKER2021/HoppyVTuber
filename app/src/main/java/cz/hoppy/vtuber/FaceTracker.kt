@@ -36,7 +36,9 @@ class FaceTracker(private val context: Context) {
     @Volatile var blinkL = 0f; private set
     @Volatile var blinkR = 0f; private set
     @Volatile var jaw = 0f; private set
-    @Volatile var smile = 0f; private set
+    @Volatile private var smileL = 0f
+    @Volatile private var smileR = 0f
+    val smile get() = (smileL + smileR) / 2f
     @Volatile var seenAt = 0L; private set
 
     // kalibrace (sdílená přes Prefs, ať platí i v bublině)
@@ -159,7 +161,8 @@ class FaceTracker(private val context: Context) {
                     "eyeBlinkLeft" -> blinkL = c.score()
                     "eyeBlinkRight" -> blinkR = c.score()
                     "jawOpen" -> jaw = c.score()
-                    "mouthSmileLeft" -> smile = c.score()
+                    "mouthSmileLeft" -> smileL = c.score()
+                    "mouthSmileRight" -> smileR = c.score()
                 }
             }
         }

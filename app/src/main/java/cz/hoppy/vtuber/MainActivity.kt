@@ -25,7 +25,6 @@ import com.google.android.filament.Skybox
 import com.google.android.material.chip.Chip
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import io.github.sceneview.SceneView
-import io.github.sceneview.math.Position
 
 /**
  * Hoppy VTuber: kamera -> FaceTracker -> HoppyAvatar (SceneView/Filament).
@@ -33,7 +32,6 @@ import io.github.sceneview.math.Position
  */
 class MainActivity : AppCompatActivity() {
 
-    private val CAM_Z = 2.5f             // vzdálenost kamery; zvětši = postava menší
     // pozadí: levandule, chroma-green (pro OBS), tmavé, bílé
     private val BACKGROUNDS = arrayOf(
         floatArrayOf(0.965f, 0.953f, 0.988f), floatArrayOf(0f, 0.69f, 0.25f),
@@ -78,9 +76,12 @@ class MainActivity : AppCompatActivity() {
         applyInsets()
 
         setBackground(0)
-        sceneView.cameraNode.position = Position(0f, 0f, CAM_Z)
+        sceneView.cameraManipulator = null      // dotyk neotáčí kamerou, záběr řídí Facecam
         tracker = FaceTracker(this)
         avatar = HoppyAvatar(sceneView, tracker)
+        avatar.loadExpressions()
+        // záběr přepočítat při každé změně velikosti (panel dole zakrývá část obrazovky)
+        sceneView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> reframe() }
         setupButtons()
 
         val perms = mutableListOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
@@ -145,6 +146,13 @@ class MainActivity : AppCompatActivity() {
         old?.let { engine.destroySkybox(it) }
     }
 
+    private fun reframe() {
+        val panel = findViewById<View>(R.id.panel)
+        val h = sceneView.height
+        val cover = if (h > 0 && panel.visibility == View.VISIBLE) (h - panel.top).toFloat() / h else 0f
+        avatar.applyFraming(cover.coerceIn(0f, 0.5f))
+    }
+
     private fun updateStatus() {
         val seen = tracker.faceVisible
         if (seen != faceShown) {
@@ -171,6 +179,9 @@ class MainActivity : AppCompatActivity() {
             tracker.calibrate()
             Toast.makeText(this, "Kalibrováno – dívej se rovně do kamery", Toast.LENGTH_SHORT).show()
         }
+        findViewById<Chip>(R.id.chipFaceCam).setOnCheckedChangeListener { _, c ->
+            avatar.faceCam = c; avatar.saveExpressions(); reframe()
+        }
         findViewById<Chip>(R.id.chipBubble).setOnClickListener { startBubble() }
         findViewById<ExtendedFloatingActionButton>(R.id.btnRec).setOnClickListener { toggleRecording() }
         // klepnutí na postavu během nahrávání schová/ukáže panel
@@ -178,6 +189,7 @@ class MainActivity : AppCompatActivity() {
             if (recording) {
                 val p = findViewById<View>(R.id.panel)
                 p.visibility = if (p.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                sceneView.post { reframe() }
             }
         }
     }
@@ -187,10 +199,13 @@ class MainActivity : AppCompatActivity() {
         avatar.loadExpressions()
         val a = avatar
         val arms = a.armsOn; val wave = a.waveOn; val happy = a.happyOn; val blush = a.blushOn
+        val face = a.faceCam
         findViewById<Chip>(R.id.chipArms).isChecked = arms
         findViewById<Chip>(R.id.chipWave).isChecked = wave
         findViewById<Chip>(R.id.chipHappy).isChecked = happy
         findViewById<Chip>(R.id.chipBlush).isChecked = blush
+        findViewById<Chip>(R.id.chipFaceCam).isChecked = face
+        reframe()
     }
 
     // ----------------------------------------------------------------- bublina
@@ -238,6 +253,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.camCard).alpha = if (on) 0f else 1f
         findViewById<View>(R.id.topBar).alpha = if (on) 0f else 1f
         findViewById<View>(R.id.panel).visibility = if (on) View.GONE else View.VISIBLE
+        sceneView.post { reframe() }
     }
 
     override fun onDestroy() {

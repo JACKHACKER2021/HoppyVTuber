@@ -29,7 +29,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import io.github.sceneview.SceneView
-import io.github.sceneview.math.Position
 import kotlin.math.abs
 
 /**
@@ -47,8 +46,6 @@ class OverlayService : Service(), LifecycleOwner {
 
         // velikosti bubliny (šířka v dp, výška = 1.25×)
         private val SIZES_DP = intArrayOf(120, 170, 230)
-        // kamera v bublině: trochu blíž než v aplikaci, ať je postava větší
-        private val BUBBLE_CAM = Position(0f, 0.1f, 2.2f)
     }
 
     private val registry = LifecycleRegistry(this)
@@ -127,12 +124,12 @@ class OverlayService : Service(), LifecycleOwner {
             sharedLifecycle = registry,
         )
         sceneView.scene.skybox = null
-        sceneView.cameraNode.position = BUBBLE_CAM
 
         val t = FaceTracker(this).also { tracker = it }
         val a = HoppyAvatar(sceneView, t).also { avatar = it }
         a.loadExpressions()
         sceneView.onFrame = { a.update() }
+        sceneView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> a.applyFraming() }
 
         controls = buildControls()
         controls.visibility = View.GONE
@@ -240,6 +237,7 @@ class OverlayService : Service(), LifecycleOwner {
         button("👋", { a.waveOn }) { a.waveOn = !a.waveOn; if (a.waveOn) a.armsOn = false }
         button("😊", { a.happyOn }) { a.happyOn = !a.happyOn }
         button("😳", { a.blushOn }) { a.blushOn = !a.blushOn }
+        button("👤", { a.faceCam }) { a.faceCam = !a.faceCam; a.applyFraming() }
         button("🎯", null) { tracker?.calibrate() }
         button("⤢", null) { cycleSize() }
         button("✕", null) { stopSelf() }

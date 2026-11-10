@@ -6,7 +6,10 @@ import com.google.android.filament.IndirectLight
 import io.github.sceneview.SceneView
 import io.github.sceneview.math.Position
 import io.github.sceneview.node.ModelNode
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Postava Hoppy ve SceneView: načte model a každý snímek ji natočí podle [FaceTracker].
@@ -24,8 +27,24 @@ class HoppyAvatar(
         const val PITCH_SIGN = 1f
         const val ROLL_SIGN = 1f
         const val ARM_DEG = 120f           // jak vysoko jdou ruce (V tvar)
-        const val MODEL_UNITS = 1.6f       // výška postavy ve scéně
+        const val MODEL_UNITS = 1.6f       // výška postavy ve scéně (chodidla y=0, špičky uší y=MODEL_UNITS)
+
+        // mluvení: pusa se otevře nad OPEN, zavře pod CLOSE (hystereze = žádné blikání)
+        const val MOUTH_OPEN = 0.16f
+        const val MOUTH_CLOSE = 0.09f
+        // úsměv (mouthSmile) nad touto hodnotou = šťastné oči
+        const val SMILE_HAPPY = 0.7f
+        // blush: poloha na tvářích (v prostoru hlavy) a velikost
+        const val BLUSH_X = 0.108f
+        const val BLUSH_Y = 0.066f
+        const val BLUSH_SCALE = 0.9f
+
+        // tan(fov/2)*2 pro výchozí objektiv 28 mm (senzor 24 mm)
+        private const val VIEW_PER_DIST = 24f / 28f
     }
+
+    /** true = jen hlava a ramena (facecam), false = celá postava */
+    var faceCam = true
 
     // výrazy / gesta (přepínají tlačítka)
     var armsOn = false
@@ -36,7 +55,8 @@ class HoppyAvatar(
     private val engine = sceneView.engine
     private var modelNode: ModelNode? = null
 
-    private class Bone(val entity: Int, val base: FloatArray)
+    /** base = transformace z modelu, shown = stejná, ale s měřítkem 1 (model ukládá skryté části zmenšené na 0.0001) */
+    private class Bone(val entity: Int, val base: FloatArray, val shown: FloatArray)
     private val bones = HashMap<String, Bone>()
 
     // vyhlazené hodnoty
@@ -46,6 +66,7 @@ class HoppyAvatar(
 
     private var closedEyes = false; private var openMouth = false
     private var blushShown = false
+    private var lastMouthK = -1f
 
     init {
         // rovnoměrné ambientní světlo, aby postava nebyla tmavá z boku/zespodu
@@ -77,8 +98,11 @@ class HoppyAvatar(
             if (e == 0) continue
             val m = FloatArray(16)
             tm.getTransform(tm.getInstance(e), m)
-            bones[name] = Bone(e, m)
+            bones[name] = Bone(e, m, unitScale(m))
         }
+        // blush trochu do stran a pod oči, ať nezasahuje do pusy
+        bones["Face_BlushLeft"]?.shown?.let { placeBlush(it, 1f) }
+        bones["Face_BlushRight"]?.shown?.let { placeBlush(it, -1f) }
         // modelové výchozí skrytí (zavřené oči, otevřená ústa, blush)
         for (n in listOf("Face_EyesClosed", "Face_MouthOpen", "Face_BlushLeft", "Face_BlushRight")) setVisible(n, false)
     }
@@ -96,12 +120,59 @@ class HoppyAvatar(
         tm.setTransform(tm.getInstance(b.entity), out)
     }
 
+    /** Kopie matice, kde mikroskopické osy (0.0001) vrátíme na délku 1. */
+    private fun unitScale(src: FloatArray): FloatArray {
+        val m = src.copyOf()
+        for (c in 0..2) {
+            val len = sqrt(m[c * 4] * m[c * 4] + m[c * 4 + 1] * m[c * 4 + 1] + m[c * 4 + 2] * m[c * 4 + 2])
+            if (len in 1e-9f..0.01f) for (r in 0..2) m[c * 4 + r] /= len
+        }
+        return m
+    }
+
+    private fun placeBlush(m: FloatArray, side: Float) {
+        for (i in intArrayOf(0, 1, 2, 4, 5, 6, 8, 9, 10)) m[i] *= BLUSH_SCALE
+        m[12] = side * BLUSH_X; m[13] = BLUSH_Y
+    }
+
     private fun setVisible(name: String, on: Boolean) {
         val b = bones[name] ?: return
-        val m = b.base.copyOf()
+        val m = b.shown.copyOf()
         if (!on) for (i in intArrayOf(0, 1, 2, 4, 5, 6, 8, 9, 10)) m[i] *= 0.0001f
         val tm = engine.transformManager
         tm.setTransform(tm.getInstance(b.entity), m)
+    }
+
+    /** Otevřená pusa: výška podle toho, jak moc otevřeš čelist (horní okraj zůstává na místě). */
+    private fun setMouthOpenAmount(k: Float) {
+        val b = bones["Face_MouthOpen"] ?: return
+        val m = b.shown.copyOf()
+        val top = 0.07f
+        Matrix.translateM(m, 0, 0f, top, 0f)
+        Matrix.scaleM(m, 0, 0.85f + 0.15f * k, k, 1f)
+        Matrix.translateM(m, 0, 0f, -top, 0f)
+        val tm = engine.transformManager
+        tm.setTransform(tm.getInstance(b.entity), m)
+    }
+
+    /**
+     * Nastaví kameru tak, aby byla vidět hlava (facecam) nebo celá postava.
+     * [bottomCover] = jaká část obrazovky dole je zakrytá panelem (0..1).
+     */
+    fun applyFraming(bottomCover: Float = 0f) {
+        val w = sceneView.width; val h = sceneView.height
+        if (w <= 0 || h <= 0) return
+        val aspect = w.toFloat() / h
+        val u = MODEL_UNITS
+        // [spodní okraj, horní okraj, potřebná šířka] ve světových jednotkách
+        val (lo, hi, needW) = if (faceCam) Triple(0.40f * u, 1.04f * u, 0.62f * u)
+                              else Triple(-0.03f * u, 1.04f * u, 0.50f * u)
+        val free = (1f - bottomCover).coerceIn(0.4f, 1f)
+        val needH = max((hi - lo) / free, needW / aspect)
+        val dist = needH / VIEW_PER_DIST
+        // střed záběru posuneme dolů, aby postava byla nad panelem
+        val camY = hi - needH / 2f
+        sceneView.cameraNode.position = Position(0f, camY, dist)
     }
 
     private fun lerp(a: Float, b: Float, k: Float) = a + (b - a) * k
@@ -127,17 +198,24 @@ class HoppyAvatar(
         setRot("RightLowerArm", 0f, 0f, 35f * sin(t * 14f) * waveAmt)
 
         // oči: zavřené při mrknutí NEBO při "Radost"
-        val blink = (tracker.blinkL + tracker.blinkR) / 2f > 0.55f
-        val closed = blink || happyOn
+        val blinkAvg = (tracker.blinkL + tracker.blinkR) / 2f
+        val blink = if (closedEyes) blinkAvg > 0.4f else blinkAvg > 0.55f
+        val smiling = tracker.smile > SMILE_HAPPY && sJaw < MOUTH_OPEN
+        val closed = blink || happyOn || smiling
         if (closed != closedEyes) {
             closedEyes = closed
             setVisible("Face_EyeLeft", !closed); setVisible("Face_EyeRight", !closed)
             setVisible("Face_EyesClosed", closed)
         }
-        val open = sJaw > 0.25f
+        val open = if (openMouth) sJaw > MOUTH_CLOSE else sJaw > MOUTH_OPEN
         if (open != openMouth) {
             openMouth = open
-            setVisible("Face_MouthClosed", !open); setVisible("Face_MouthOpen", open)
+            setVisible("Face_MouthClosed", !open)
+            if (!open) { setVisible("Face_MouthOpen", false); lastMouthK = -1f }
+        }
+        if (open) {
+            val k = (0.45f + (sJaw - MOUTH_CLOSE) / 0.35f).coerceIn(0.45f, 1f)
+            if (abs(k - lastMouthK) > 0.02f) { lastMouthK = k; setMouthOpenAmount(k) }
         }
         if (blushOn != blushShown) {
             blushShown = blushOn
@@ -151,12 +229,14 @@ class HoppyAvatar(
         val p = Prefs.get(sceneView.context)
         armsOn = p.getBoolean("arms", false); waveOn = p.getBoolean("wave", false)
         happyOn = p.getBoolean("happy", false); blushOn = p.getBoolean("blush", false)
+        faceCam = p.getBoolean("faceCam", true)
     }
 
     fun saveExpressions() {
         Prefs.get(sceneView.context).edit()
             .putBoolean("arms", armsOn).putBoolean("wave", waveOn)
             .putBoolean("happy", happyOn).putBoolean("blush", blushOn)
+            .putBoolean("faceCam", faceCam)
             .apply()
     }
 }
