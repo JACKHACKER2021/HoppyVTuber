@@ -10,6 +10,17 @@ Při nahrávání se schová panel i náhled kamery. Klepnutím na postavu panel
 - **Úsměv**: velký úsměv = šťastné zavřené oči (jako 😊 Radost).
 - **Mrkání** a **😳 Blush** (na tvářích pod očima).
 
+## ✨ Efekty (vlastní 3D modely)
+Druhá řada tlačítek v aplikaci, v bublině tlačítko **✨** otevře samostatný plovoucí panel efektů (přesuneš ho za ⠿ a mačkáš vedle hry):
+🤧 Kýchnutí · 🤩 Nadšení · 🤒 Nemocná (přepínač) · 🥕 Mrkvička · 🤮 Zvracení · 😍 Zamilovaná · 🩸 Krev z nosu · 🥺 UwU
+Rekvizity (mrkev, srdíčka, hvězdičky, kapky, teploměr…) jsou v `app/src/main/assets/models/props/`, generuje je `python3 tools/make_props.py`. Chování efektů je v `Effects.kt`.
+
+## 🐰 Pohyb jako v originále
+Postava pořád hraje animaci **Idle** z modelu (houpání uší, ocásku a těla). 👋 Mávat a 😊 Radost spouští animace **Wave** a **Happy** z modelu (plynulé prolnutí). Uši a ocásek jsou navíc **pružné**: dobíhají a houpou se, když hneš hlavou. Ladění: `EAR_FLOP`, `EAR_STIFF`, `EAR_DAMP`, `TAIL_WAG`, `BODY_FOLLOW` v `HoppyAvatar.kt`.
+
+## 🖼️ Vlastní pozadí
+**🖼️ Vlastní pozadí** → vyber obrázek z galerie. Vyplní celý záběr (i v bublině). **🎨 Pozadí** přepne zpět na barvy; v bublině 🎨 projde barvy a pak tvůj obrázek.
+
 ## 🎙️ Hlas Hoppy (měnič hlasu v telefonu)
 **Mluvíš ty a slyšíš se hned**, jen jiným hlasem. Hlas se mění přímo v telefonu: nic se negeneruje, neposílá na internet a nespotřebovává kredity.
 ElevenLabs slouží jen jako **knihovna hlasů**: aplikace stáhne krátkou veřejnou ukázku vybraného hlasu a podle ní nastaví výšku a barvu tvého hlasu.

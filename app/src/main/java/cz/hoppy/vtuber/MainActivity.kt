@@ -49,6 +49,12 @@ class MainActivity : AppCompatActivity() {
         else Toast.makeText(this, "Bez kamery se postava nehýbe", Toast.LENGTH_LONG).show()
     }
 
+    private val pickBg = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        if (CustomBg.save(this, uri)) avatar.setBackdrop(CustomBg.load(this))
+        else Toast.makeText(this, "Obrázek nejde načíst", Toast.LENGTH_SHORT).show()
+    }
+
     private val overlayPermLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (Settings.canDrawOverlays(this)) launchBubble()
         else Toast.makeText(this, "Bez povolení „Zobrazovat přes jiné aplikace“ bublina nepůjde", Toast.LENGTH_LONG).show()
@@ -80,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         // záběr přepočítat při každé změně velikosti (panel dole zakrývá část obrazovky)
         sceneView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> reframe() }
         setupButtons()
+        avatar.setBackdrop(CustomBg.load(this))
 
         val perms = mutableListOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) perms += Manifest.permission.POST_NOTIFICATIONS
@@ -195,7 +202,19 @@ class MainActivity : AppCompatActivity() {
         cWave.setOnCheckedChangeListener { _, c -> avatar.waveOn = c; if (c) cArms.isChecked = false; avatar.saveExpressions() }
         cHappy.setOnCheckedChangeListener { _, c -> avatar.happyOn = c; avatar.saveExpressions() }
         cBlush.setOnCheckedChangeListener { _, c -> avatar.blushOn = c; avatar.saveExpressions() }
-        findViewById<Chip>(R.id.chipBg).setOnClickListener { setBackground(bgIndex + 1) }
+        findViewById<Chip>(R.id.chipBg).setOnClickListener {
+            if (CustomBg.isOn(this)) { CustomBg.setOn(this, false); avatar.setBackdrop(null) }
+            else setBackground(bgIndex + 1)
+        }
+        findViewById<Chip>(R.id.chipBgImage).setOnClickListener { pickBg.launch("image/*") }
+        // efekty s vlastními modely
+        val row = findViewById<android.widget.LinearLayout>(R.id.effectsRow)
+        for (fx in Fx.values()) {
+            val c = layoutInflater.inflate(R.layout.chip_effect, row, false) as Chip
+            c.text = "${fx.emoji} ${fx.label}"
+            c.setOnClickListener { avatar.trigger(fx) }
+            row.addView(c)
+        }
         findViewById<Chip>(R.id.chipCalib).setOnClickListener {
             tracker.calibrate()
             Toast.makeText(this, "Kalibrováno – dívej se rovně do kamery", Toast.LENGTH_SHORT).show()

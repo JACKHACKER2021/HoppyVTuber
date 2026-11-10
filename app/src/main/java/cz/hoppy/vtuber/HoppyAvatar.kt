@@ -1,18 +1,25 @@
 package cz.hoppy.vtuber
 
+import android.graphics.Bitmap
 import android.opengl.Matrix
 import android.os.SystemClock
 import com.google.android.filament.IndirectLight
 import io.github.sceneview.SceneView
+import io.github.sceneview.math.Direction
 import io.github.sceneview.math.Position
+import io.github.sceneview.math.Size
+import io.github.sceneview.node.ImageNode
 import io.github.sceneview.node.ModelNode
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Postava Hoppy ve SceneView: načte model a každý snímek ji natočí podle [FaceTracker].
+ * Postava Hoppy ve SceneView.
+ * Každý snímek: animace z modelu (Idle = houpání uší, ocásku a těla jako v originále; Wave; Happy)
+ * -> navrch natočení hlavy z kamery -> pružiny uší a ocásku -> efekty -> obličej.
  * Stejná třída běží v aplikaci i v plovoucí bublině nad hrou.
  */
 class HoppyAvatar(
@@ -28,6 +35,7 @@ class HoppyAvatar(
         const val ROLL_SIGN = 1f
         const val ARM_DEG = 120f           // jak vysoko jdou ruce (V tvar)
         const val MODEL_UNITS = 1.6f       // výška postavy ve scéně (chodidla y=0, špičky uší y=MODEL_UNITS)
+        private const val RAW_HEIGHT = 1.4806f   // výška modelu v souboru
 
         // mluvení: pusa se otevře nad OPEN, zavře pod CLOSE (hystereze = žádné blikání)
         const val MOUTH_OPEN = 0.16f
@@ -39,6 +47,16 @@ class HoppyAvatar(
         const val BLUSH_Y = 0.066f
         const val BLUSH_SCALE = 0.9f
 
+        // pružnost: jak moc uši a ocásek dobíhají za pohybem hlavy
+        const val EAR_FLOP = 0.35f         // víc = uši víc plandají
+        const val EAR_STIFF = 60f          // tuhost pružiny (víc = rychlejší návrat)
+        const val EAR_DAMP = 7f            // tlumení (míň = víc se houpou)
+        const val TAIL_WAG = 12f           // základní vrtění ocáskem (stupně)
+        const val BODY_FOLLOW = 0.25f      // kolik natočení hlavy převezme tělo
+
+        private const val EYE_CY = 0.1425f
+        private const val EYE_CX = 0.065f
+
         // tan(fov/2)*2 pro výchozí objektiv 28 mm (senzor 24 mm)
         private const val VIEW_PER_DIST = 24f / 28f
     }
@@ -46,30 +64,40 @@ class HoppyAvatar(
     /** true = jen hlava a ramena (facecam), false = celá postava */
     var faceCam = true
 
-    /** Hlasitost Hoppy hlasu z měniče (0..1) – když mluví ElevenLabs hlas, hýbe se pusa podle něj. */
+    /** Hlasitost hlasu z měniče (0..1) – pusa se hýbe i podle něj. */
     var voiceLevel: () -> Float = { 0f }
 
     // výrazy / gesta (přepínají tlačítka)
     var armsOn = false
-    var waveOn = false
-    var happyOn = false
+    var waveOn = false      // animace Wave z modelu
+    var happyOn = false     // animace Happy z modelu (ruce do stran, zavřené oči, blush)
     var blushOn = false
 
     private val engine = sceneView.engine
+    private val tm = engine.transformManager
     private var modelNode: ModelNode? = null
+    val effects = Effects(sceneView)
+    private val pose = FxPose()
 
-    /** base = transformace z modelu, shown = stejná, ale s měřítkem 1 (model ukládá skryté části zmenšené na 0.0001) */
     private class Bone(val entity: Int, val base: FloatArray, val shown: FloatArray)
     private val bones = HashMap<String, Bone>()
+    private val anim = HashMap<String, Int>()
 
     // vyhlazené hodnoty
     private var sYaw = 0f; private var sPitch = 0f; private var sRoll = 0f
     private var sJaw = 0f
-    private var armsAmt = 0f; private var waveAmt = 0f
+    private var armsAmt = 0f; private var waveAmt = 0f; private var happyAmt = 0f
+    private var pYaw = 0f; private var pPitch = 0f; private var pRoll = 0f
+    private var lastT = -1f
+
+    // pružiny [úhel, rychlost]
+    private val earRoll = FloatArray(2); private val earPitch = FloatArray(2); private val tailSwing = FloatArray(2)
 
     private var closedEyes = false; private var openMouth = false
-    private var blushShown = false
-    private var lastMouthK = -1f
+
+    // vlastní obrázek pozadí
+    private var backdrop: ImageNode? = null
+    private var backdropAspect = 1f
 
     init {
         // rovnoměrné ambientní světlo, aby postava nebyla tmavá z boku/zespodu
@@ -91,9 +119,9 @@ class HoppyAvatar(
         sceneView.addChildNode(node)
         modelNode = node
         val asset = instance.asset
-        val tm = engine.transformManager
         for (name in listOf(
-            "Head", "LeftUpperArm", "RightUpperArm", "RightLowerArm", "UpperTorso", "Tail",
+            "Root", "Head", "UpperTorso", "Tail", "LeftEar", "RightEar",
+            "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm",
             "Face_EyeLeft", "Face_EyeRight", "Face_EyesClosed",
             "Face_MouthClosed", "Face_MouthOpen", "Face_BlushLeft", "Face_BlushRight"
         )) {
@@ -103,24 +131,29 @@ class HoppyAvatar(
             tm.getTransform(tm.getInstance(e), m)
             bones[name] = Bone(e, m, unitScale(m))
         }
-        // blush trochu do stran a pod oči, ať nezasahuje do pusy
         bones["Face_BlushLeft"]?.shown?.let { placeBlush(it, 1f) }
         bones["Face_BlushRight"]?.shown?.let { placeBlush(it, -1f) }
-        // modelové výchozí skrytí (zavřené oči, otevřená ústa, blush)
-        for (n in listOf("Face_EyesClosed", "Face_MouthOpen", "Face_BlushLeft", "Face_BlushRight")) setVisible(n, false)
+        instance.animator.let { a ->
+            for (i in 0 until a.animationCount) anim[a.getAnimationName(i)] = i
+        }
     }
 
-    private fun setRot(name: String, rx: Float, ry: Float, rz: Float) {
+    // ------------------------------------------------------------- matice
+    private fun get(name: String): FloatArray? {
+        val b = bones[name] ?: return null
+        val m = FloatArray(16); tm.getTransform(tm.getInstance(b.entity), m); return m
+    }
+    private fun put(name: String, m: FloatArray) {
         val b = bones[name] ?: return
-        val r = FloatArray(16); val a = FloatArray(16); val t = FloatArray(16)
-        Matrix.setIdentityM(r, 0)
-        Matrix.setRotateM(a, 0, ry, 0f, 1f, 0f); Matrix.multiplyMM(t, 0, r, 0, a, 0)
-        Matrix.setRotateM(a, 0, rx, 1f, 0f, 0f); Matrix.multiplyMM(r, 0, t, 0, a, 0)
-        Matrix.setRotateM(a, 0, rz, 0f, 0f, 1f); Matrix.multiplyMM(t, 0, r, 0, a, 0)
-        val out = FloatArray(16)
-        Matrix.multiplyMM(out, 0, b.base, 0, t, 0)
-        val tm = engine.transformManager
-        tm.setTransform(tm.getInstance(b.entity), out)
+        tm.setTransform(tm.getInstance(b.entity), m)
+    }
+    /** Aktuální (animovaná) transformace kosti × rotace navíc. */
+    private fun addRot(name: String, rx: Float, ry: Float, rz: Float) {
+        val m = get(name) ?: return
+        if (ry != 0f) Matrix.rotateM(m, 0, ry, 0f, 1f, 0f)
+        if (rx != 0f) Matrix.rotateM(m, 0, rx, 1f, 0f, 0f)
+        if (rz != 0f) Matrix.rotateM(m, 0, rz, 0f, 0f, 1f)
+        put(name, m)
     }
 
     /** Kopie matice, kde mikroskopické osy (0.0001) vrátíme na délku 1. */
@@ -138,24 +171,22 @@ class HoppyAvatar(
         m[12] = side * BLUSH_X; m[13] = BLUSH_Y
     }
 
-    private fun setVisible(name: String, on: Boolean) {
+    /** Obličejová část: viditelná/skrytá, volitelně zmenšená/otočená kolem bodu (cx, cy). */
+    private fun face(name: String, on: Boolean, sx: Float = 1f, sy: Float = 1f, cx: Float = 0f, cy: Float = 0f) {
         val b = bones[name] ?: return
         val m = b.shown.copyOf()
-        if (!on) for (i in intArrayOf(0, 1, 2, 4, 5, 6, 8, 9, 10)) m[i] *= 0.0001f
-        val tm = engine.transformManager
-        tm.setTransform(tm.getInstance(b.entity), m)
+        if (!on) { for (i in intArrayOf(0, 1, 2, 4, 5, 6, 8, 9, 10)) m[i] *= 0.0001f }
+        else if (sx != 1f || sy != 1f) {
+            Matrix.translateM(m, 0, cx, cy, 0f)
+            Matrix.scaleM(m, 0, sx, sy, 1f)
+            Matrix.translateM(m, 0, -cx, -cy, 0f)
+        }
+        put(name, m)
     }
 
-    /** Otevřená pusa: výška podle toho, jak moc otevřeš čelist (horní okraj zůstává na místě). */
-    private fun setMouthOpenAmount(k: Float) {
-        val b = bones["Face_MouthOpen"] ?: return
-        val m = b.shown.copyOf()
-        val top = 0.07f
-        Matrix.translateM(m, 0, 0f, top, 0f)
-        Matrix.scaleM(m, 0, 0.85f + 0.15f * k, k, 1f)
-        Matrix.translateM(m, 0, 0f, -top, 0f)
-        val tm = engine.transformManager
-        tm.setTransform(tm.getInstance(b.entity), m)
+    private fun spring(s: FloatArray, target: Float, dt: Float, stiff: Float = EAR_STIFF, damp: Float = EAR_DAMP) {
+        s[1] += ((target - s[0]) * stiff - s[1] * damp) * dt
+        s[0] += s[1] * dt
     }
 
     /**
@@ -176,55 +207,139 @@ class HoppyAvatar(
         // střed záběru posuneme dolů, aby postava byla nad panelem
         val camY = hi - needH / 2f
         sceneView.cameraNode.position = Position(0f, camY, dist)
+        placeBackdrop(camY, dist, needH, aspect)
     }
 
     private fun lerp(a: Float, b: Float, k: Float) = a + (b - a) * k
 
+    fun trigger(fx: Fx) = effects.trigger(fx, SystemClock.uptimeMillis() / 1000f)
+
     /** Volat každý snímek (sceneView.onFrame). */
     fun update() {
+        val inst = modelNode?.modelInstance ?: return
         val t = SystemClock.uptimeMillis() / 1000f
+        val dt = if (lastT < 0) 1 / 60f else (t - lastT).coerceIn(0.001f, 0.05f)
+        lastT = t
+
+        // --- tracking (vyhlazený)
         sYaw = lerp(sYaw, tracker.yaw - tracker.offYaw, 0.35f)
         sPitch = lerp(sPitch, tracker.pitch - tracker.offPitch, 0.35f)
         sRoll = lerp(sRoll, tracker.roll - tracker.offRoll, 0.35f)
         sJaw = lerp(sJaw, max(tracker.jaw, voiceLevel() * 0.6f), 0.5f)
 
+        // --- efekty (potřebují světovou matici hlavy z minulého snímku)
+        pose.reset()
+        val headW = FloatArray(16)
+        bones["Head"]?.let { tm.getWorldTransform(tm.getInstance(it.entity), headW) }
+        effects.update(t, dt, headW, pose)
+
+        // --- 1) animace z modelu: vše na výchozí pózu, pak Idle, Wave / Happy prolnuté
+        for ((_, b) in bones) tm.setTransform(tm.getInstance(b.entity), b.base)
+        val a = inst.animator
+        waveAmt = lerp(waveAmt, if (waveOn) 1f else 0f, 0.12f)
+        happyAmt = lerp(happyAmt, if (happyOn) 1f else 0f, 0.12f)
+        val idle = anim["Idle"]
+        val idleT = t % 4f
+        idle?.let { a.applyAnimation(it, idleT) }
+        anim["Wave"]?.let { w -> if (waveAmt > 0.01f) { a.applyAnimation(w, t % 2.4f); idle?.let { a.applyCrossFade(it, idleT, waveAmt) } } }
+        anim["Happy"]?.let { h -> if (happyAmt > 0.01f) { a.applyAnimation(h, t % 2f); idle?.let { a.applyCrossFade(it, idleT, happyAmt) } } }
+
+        // --- 2) hlava = animace × kamera × efekt
         val m = if (MIRROR) -1f else 1f
-        setRot("Head", PITCH_SIGN * sPitch, m * YAW_SIGN * sYaw, m * ROLL_SIGN * sRoll)
-        setRot("UpperTorso", 0f, m * YAW_SIGN * sYaw * 0.2f, 0f)
-        setRot("Tail", 0f, 0f, 10f * sin(t * 5f))
+        val yaw = m * YAW_SIGN * sYaw + pose.yaw
+        val pitch = PITCH_SIGN * sPitch + pose.pitch
+        val roll = m * ROLL_SIGN * sRoll + pose.roll
+        addRot("Head", pitch, yaw, roll)
+        addRot("UpperTorso", pitch * 0.15f, yaw * BODY_FOLLOW, roll * 0.3f)
+        if (pose.lift != 0f) get("Root")?.let { r -> r[13] += pose.lift * RAW_HEIGHT / MODEL_UNITS; put("Root", r) }
 
-        // ruce
-        armsAmt = lerp(armsAmt, if (armsOn) 1f else 0f, 0.15f)
-        waveAmt = lerp(waveAmt, if (waveOn) 1f else 0f, 0.15f)
-        setRot("LeftUpperArm", 0f, 0f, ARM_DEG * armsAmt)
-        setRot("RightUpperArm", 0f, 0f, -maxOf(ARM_DEG * armsAmt, 135f * waveAmt))
-        setRot("RightLowerArm", 0f, 0f, 35f * sin(t * 14f) * waveAmt)
+        // --- 3) pružné uši a ocásek: dobíhají za rychlostí hlavy
+        val vYaw = (yaw - pYaw) / dt; val vPitch = (pitch - pPitch) / dt; val vRoll = (roll - pRoll) / dt
+        pYaw = yaw; pPitch = pitch; pRoll = roll
+        if (pose.kick != 0f) { earPitch[1] += 900f * pose.kick }
+        spring(earRoll, (-vRoll - vYaw * 0.5f) * EAR_FLOP * 0.05f, dt)
+        spring(earPitch, (vPitch * EAR_FLOP * 0.05f) + pose.lift * 300f, dt)
+        earRoll[0] = earRoll[0].coerceIn(-35f, 35f); earPitch[0] = earPitch[0].coerceIn(-40f, 40f)
+        val droop = pose.earDroop * 28f
+        addRot("LeftEar", earPitch[0] + droop * 0.5f, 0f, earRoll[0] - droop)
+        addRot("RightEar", earPitch[0] + droop * 0.5f, 0f, earRoll[0] + droop)
+        val wagSpeed = 6f + 6f * max(0f, pose.wag) - 3f * max(0f, -pose.wag)
+        val wagAmp = TAIL_WAG * (1f + 1.5f * max(0f, pose.wag) - 0.6f * max(0f, -pose.wag))
+        spring(tailSwing, -vYaw * 0.08f, dt, 40f, 5f)
+        addRot("Tail", 0f, tailSwing[0], wagAmp * sin(t * wagSpeed))
 
-        // oči: zavřené při mrknutí NEBO při "Radost"
+        // --- 4) ruce: V pose přes animaci
+        armsAmt = lerp(armsAmt, if (armsOn || pose.arms > 0.5f) 1f else 0f, 0.15f)
+        if (armsAmt > 0.01f) {
+            addRot("LeftUpperArm", 0f, 0f, ARM_DEG * armsAmt)
+            addRot("RightUpperArm", 0f, 0f, -ARM_DEG * armsAmt)
+        }
+
+        // --- 5) obličej (animace ho přepsaly, nastavujeme každý snímek)
         val blinkAvg = (tracker.blinkL + tracker.blinkR) / 2f
         val blink = if (closedEyes) blinkAvg > 0.4f else blinkAvg > 0.55f
         val smiling = tracker.smile > SMILE_HAPPY && sJaw < MOUTH_OPEN
-        val closed = blink || happyOn || smiling
-        if (closed != closedEyes) {
-            closedEyes = closed
-            setVisible("Face_EyeLeft", !closed); setVisible("Face_EyeRight", !closed)
-            setVisible("Face_EyesClosed", closed)
+        val eyes = when {
+            pose.eyes != Eyes.AUTO -> pose.eyes
+            happyAmt > 0.5f || happyOn || blink || smiling -> Eyes.CLOSED
+            else -> Eyes.AUTO
         }
-        val open = if (openMouth) sJaw > MOUTH_CLOSE else sJaw > MOUTH_OPEN
-        if (open != openMouth) {
-            openMouth = open
-            setVisible("Face_MouthClosed", !open)
-            if (!open) { setVisible("Face_MouthOpen", false); lastMouthK = -1f }
+        closedEyes = eyes == Eyes.CLOSED
+        val openEyes = eyes == Eyes.AUTO || eyes == Eyes.WIDE
+        val es = if (eyes == Eyes.WIDE) 1.15f else 1f
+        face("Face_EyeLeft", openEyes, es, es * pose.squint, EYE_CX, EYE_CY)
+        face("Face_EyeRight", openEyes, es, es * pose.squint, -EYE_CX, EYE_CY)
+        when (eyes) {
+            Eyes.CLOSED -> face("Face_EyesClosed", true)
+            Eyes.UWU -> face("Face_EyesClosed", true, -1f, -1f, 0f, EYE_CY)   // otočené o 180° = „u u“
+            else -> face("Face_EyesClosed", false)
         }
-        if (open) {
-            val k = (0.45f + (sJaw - MOUTH_CLOSE) / 0.35f).coerceIn(0.45f, 1f)
-            if (abs(k - lastMouthK) > 0.02f) { lastMouthK = k; setMouthOpenAmount(k) }
+
+        val wantK: Float? = when {
+            pose.mouth == 0f -> null
+            pose.mouth > 0f -> pose.mouth.coerceIn(0.45f, 1f)
+            else -> {
+                val open = if (openMouth) sJaw > MOUTH_CLOSE else sJaw > MOUTH_OPEN
+                if (open) (0.45f + (sJaw - MOUTH_CLOSE) / 0.35f).coerceIn(0.45f, 1f) else null
+            }
         }
-        if (blushOn != blushShown) {
-            blushShown = blushOn
-            setVisible("Face_BlushLeft", blushOn); setVisible("Face_BlushRight", blushOn)
+        openMouth = wantK != null
+        face("Face_MouthClosed", wantK == null)
+        if (wantK != null) face("Face_MouthOpen", true, 0.85f + 0.15f * wantK, wantK, 0f, 0.07f)
+        else face("Face_MouthOpen", false)
+
+        val blush = blushOn || pose.blush || happyAmt > 0.5f
+        face("Face_BlushLeft", blush); face("Face_BlushRight", blush)
+
+        a.updateBoneMatrices()
+    }
+
+    // ------------------------------------------------------------- vlastní pozadí
+    /** Obrázek za postavou (null = zpět na barvu). Drží se kamery a vždy vyplní záběr. */
+    fun setBackdrop(bmp: Bitmap?) {
+        backdrop?.let { sceneView.removeChildNode(it); it.destroy() }
+        backdrop = null
+        if (bmp == null) return
+        backdropAspect = bmp.width.toFloat() / bmp.height
+        backdrop = ImageNode(sceneView.materialLoader, bmp, Size(backdropAspect, 1f), normal = Direction(z = 1f)).also {
+            sceneView.addChildNode(it)
         }
-        modelNode?.modelInstance?.animator?.updateBoneMatrices()
+        applyFramingAgain()
+    }
+
+    private var lastFrame: FloatArray? = null
+    private fun applyFramingAgain() { lastFrame?.let { placeBackdrop(it[0], it[1], it[2], it[3]) } }
+
+    private fun placeBackdrop(camY: Float, dist: Float, viewH: Float, aspect: Float) {
+        lastFrame = floatArrayOf(camY, dist, viewH, aspect)
+        val node = backdrop ?: return
+        val back = 6f                                   // jak daleko za postavou
+        val h = viewH * (dist + back) / dist            // výška záběru v té vzdálenosti
+        val w = h * aspect
+        // „cover“: obrázek pokryje celý záběr
+        val s = max(w / backdropAspect, h) * 1.02f
+        node.position = Position(0f, camY, -back)
+        node.scale = io.github.sceneview.math.Scale(s, s, 1f)
     }
 
     // výrazy se ukládají, aby bublina převzala nastavení z aplikace a naopak

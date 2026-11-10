@@ -133,13 +133,14 @@ class OverlayService : Service(), LifecycleOwner {
             cameraManipulator = null,        // tahání = přesun bubliny, ne otáčení kamery
             sharedLifecycle = registry,
         )
-        bgIndex = prefs.getInt("bgIndex", 0)
-        setBackground(bgIndex)
 
         val t = FaceTracker(this).also { tracker = it }
         val a = HoppyAvatar(sceneView, t).also { avatar = it }
         a.loadExpressions()
-        sceneView.onFrame = { a.update(); updateVoiceTag() }
+        bgIndex = prefs.getInt("bgIndex", 0)
+        setBackground(bgIndex)
+        a.setBackdrop(CustomBg.load(this))
+        sceneView.onFrame = { a.update(); updateVoiceTag(); if (pad != null && a.effects.active != lastFx) { lastFx = a.effects.active; refreshPad() } }
         sceneView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> a.applyFraming() }
 
         controls = buildControls()
@@ -256,7 +257,14 @@ class OverlayService : Service(), LifecycleOwner {
             Prefs.get(this).edit().putBoolean("voiceOn", on).apply()
             if (on) startVoice() else stopVoice()
         }
-        button("🎨", null) { setBackground(bgIndex + 1) }
+        button("✨", { pad != null }) { togglePad() }
+        button("🎨", null) {
+            // barvy dokola, po poslední barvě vlastní obrázek (když existuje)
+            if (CustomBg.isOn(this)) { CustomBg.setOn(this, false); a.setBackdrop(null); setBackground(0) }
+            else if (bgIndex == Prefs.BACKGROUNDS.lastIndex && CustomBg.exists(this)) {
+                CustomBg.setOn(this, true); a.setBackdrop(CustomBg.load(this))
+            } else setBackground(bgIndex + 1)
+        }
         button("🎯", null) { tracker?.calibrate() }
         button("⤢", null) { cycleSize() }
         button("✕", null) { stopSelf() }
@@ -320,6 +328,76 @@ class OverlayService : Service(), LifecycleOwner {
         old?.let { runCatching { engine.destroySkybox(it) } }
     }
 
+    // ------------------------------------------------------------- panel efektů
+    private var pad: LinearLayout? = null
+    private var padParams: WindowManager.LayoutParams? = null
+
+    /** Samostatné plovoucí okénko s tlačítky efektů – mačkáš je mimo bublinu, třeba vedle hry. */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun togglePad() {
+        pad?.let { runCatching { wm.removeView(it) }; pad = null; return }
+        val prefs = Prefs.get(this)
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(4.dp, 4.dp, 4.dp, 4.dp)
+            background = GradientDrawable().apply { cornerRadius = 18.dp.toFloat(); setColor(Color.parseColor("#E6141820")) }
+        }
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = prefs.getInt("padX", 8.dp); y = prefs.getInt("padY", 260.dp)
+        }
+        // úchyt na přesun
+        val handle = TextView(this).apply {
+            text = "⠿"; textSize = 16f; gravity = Gravity.CENTER; setTextColor(Color.parseColor("#8A93A3"))
+            setPadding(0, 2.dp, 0, 2.dp)
+        }
+        var dx = 0f; var dy = 0f; var sx = 0; var sy = 0
+        handle.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { dx = e.rawX; dy = e.rawY; sx = lp.x; sy = lp.y }
+                MotionEvent.ACTION_MOVE -> {
+                    lp.x = sx + (e.rawX - dx).toInt(); lp.y = sy + (e.rawY - dy).toInt()
+                    runCatching { wm.updateViewLayout(col, lp) }
+                }
+                MotionEvent.ACTION_UP -> prefs.edit().putInt("padX", lp.x).putInt("padY", lp.y).apply()
+            }
+            true
+        }
+        col.addView(handle)
+        for (fx in Fx.values()) {
+            col.addView(TextView(this).apply {
+                text = fx.emoji; textSize = 22f; gravity = Gravity.CENTER
+                setPadding(8.dp, 6.dp, 8.dp, 6.dp)
+                contentDescription = fx.label
+                setOnClickListener { avatar?.trigger(fx); refreshPad() }
+            })
+        }
+        col.addView(TextView(this).apply {
+            text = "✕"; textSize = 14f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+            setPadding(0, 4.dp, 0, 4.dp); setOnClickListener { togglePad() }
+        })
+        wm.addView(col, lp)
+        pad = col; padParams = lp
+        refreshPad()
+    }
+
+    /** Zvýrazní běžící efekt (hlavně přepínač 🤒). */
+    private fun refreshPad() {
+        val col = pad ?: return
+        val act = avatar?.effects?.active
+        Fx.values().forEachIndexed { i, fx ->
+            col.getChildAt(i + 1)?.background = GradientDrawable().apply {
+                cornerRadius = 12.dp.toFloat()
+                setColor(if (fx == act) Color.parseColor("#665BD07A") else Color.TRANSPARENT)
+            }
+        }
+    }
+
     // ------------------------------------------------------------- hlas
     private fun startVoice() {
         stopVoice()
@@ -335,6 +413,7 @@ class OverlayService : Service(), LifecycleOwner {
     }
 
     private var lastTag = ""
+    private var lastFx: Fx? = null
     private fun updateVoiceTag() {
         val v = voice
         val t = when {
@@ -354,6 +433,7 @@ class OverlayService : Service(), LifecycleOwner {
         running = false
         runCatching { getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener) }
         stopVoice()
+        pad?.let { runCatching { wm.removeView(it) } }; pad = null
         tracker?.close()
         if (registry.currentState != Lifecycle.State.INITIALIZED) {
             registry.currentState = Lifecycle.State.DESTROYED   // SceneView se uklidí sama
