@@ -43,6 +43,7 @@ class OverlayService : Service(), LifecycleOwner {
     companion object {
         const val ACTION_STOP = "stop"
         const val ACTION_REC = "rec"            // zapnout/vypnout nahrávání (z notifikace)
+        const val ACTION_REC_GRANTED = "recGranted"   // uživatel povolil záznam obrazovky
         /** Zavolá se, jakmile je okno bubliny na obrazovce (aplikace se pak může zavřít). */
         @Volatile var onShown: (() -> Unit)? = null
         @Volatile var running = false
@@ -65,7 +66,6 @@ class OverlayService : Service(), LifecycleOwner {
     private lateinit var voiceTag: TextView
     private lateinit var recTag: TextView
     private lateinit var placeholder: TextView
-    private var rec: SceneRecorder? = null
     private var voice: VoiceChanger? = null
     private var bgIndex = 0
     private var mySkybox: com.google.android.filament.Skybox? = null
@@ -93,6 +93,11 @@ class OverlayService : Service(), LifecycleOwner {
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_REC) { toggleRec(); return START_NOT_STICKY }
+        if (intent?.action == ACTION_REC_GRANTED) {
+            @Suppress("DEPRECATION") val data = intent.getParcelableExtra<Intent>("data")
+            if (data != null) startScreenRec(intent.getIntExtra("code", 0), data)
+            return START_NOT_STICKY
+        }
         startInForeground()
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
@@ -126,7 +131,8 @@ class OverlayService : Service(), LifecycleOwner {
 
     private fun startInForeground() {
         val type0 = if (Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0
-        val type = if (Build.VERSION.SDK_INT >= 30 && hasMic()) type0 or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else type0
+        var type = if (Build.VERSION.SDK_INT >= 30 && hasMic()) type0 or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else type0
+        if (projectionGranted && Build.VERSION.SDK_INT >= 29) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
         ServiceCompat.startForeground(this, 2, notification(), type)
     }
 
@@ -148,7 +154,7 @@ class OverlayService : Service(), LifecycleOwner {
         val recPi = PendingIntent.getService(
             this, 3, Intent(this, OverlayService::class.java).setAction(ACTION_REC), piFlags
         )
-        val isRec = rec?.isRecording == true
+        val isRec = isRec()
         return Notification.Builder(this, "bubble")
             .setContentTitle(if (isRec) "🔴 Hoppy natáčí" else "Hoppy je v bublině")
             .setContentText(if (isRec) "Zastavíš tlačítkem níž (funguje, i když bublinu nevidíš)."
@@ -281,7 +287,8 @@ class OverlayService : Service(), LifecycleOwner {
                         Prefs.get(this@OverlayService).edit()
                             .putInt("bubbleX", params.x).putInt("bubbleY", params.y).apply()
                     } else {
-                        if (::controls.isInitialized)
+                        if (isRec()) showControlsNow()
+                        else if (::controls.isInitialized)
                             controls.visibility = if (controls.visibility == View.VISIBLE) View.GONE else View.VISIBLE
                     }
                 }
@@ -315,7 +322,7 @@ class OverlayService : Service(), LifecycleOwner {
                 }
             }
             refresh()
-            tv.setOnClickListener { onClick(); refresh(); a.saveExpressions() }
+            tv.setOnClickListener { onClick(); refresh(); a.saveExpressions(); hideControlsLater() }
             bar.addView(tv)
             return tv
         }
@@ -337,7 +344,7 @@ class OverlayService : Service(), LifecycleOwner {
             Prefs.get(this).edit().putBoolean("voiceOn", on).apply()
             if (on) startVoice() else stopVoice()
         }
-        button("⏺", { rec?.isRecording == true }) { toggleRec() }
+        button("⏺", { isRec() }) { toggleRec() }
         button("✨", { pad != null }) { togglePad() }
         button("🎨", null) {
             // barvy dokola, po poslední barvě vlastní obrázek (když existuje)
@@ -408,7 +415,6 @@ class OverlayService : Service(), LifecycleOwner {
 
     private fun resizeFrame() {
         val (w, h) = sceneSize()
-        if (rec?.isRecording == true) { toast("Velikost nejde měnit při nahrávání"); return }
         sceneView.layoutParams = (sceneView.layoutParams as FrameLayout.LayoutParams).apply { width = w; height = h }
         root?.let { wm.updateViewLayout(it, params) }
     }
@@ -475,7 +481,7 @@ class OverlayService : Service(), LifecycleOwner {
             items += Triple("😳", { a.blushOn }) { a.blushOn = !a.blushOn; a.saveExpressions() }
             for (fx in Fx.values()) items += Triple(fx.emoji, { a.effects.active == fx }) { a.trigger(fx) }
         }
-        items += Triple("⏺", { rec?.isRecording == true }) { toggleRec() }
+        items += Triple("⏺", { isRec() }) { toggleRec() }
         padItems.clear()
         items.chunked(2).forEach { pair ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -483,7 +489,7 @@ class OverlayService : Service(), LifecycleOwner {
                 val tv = TextView(this).apply {
                     text = emoji; textSize = 20f; gravity = Gravity.CENTER
                     setPadding(7.dp, 5.dp, 7.dp, 5.dp)
-                    setOnClickListener { act(); refreshPad() }
+                    setOnClickListener { act(); refreshPad(); hideControlsLater() }
                 }
                 padItems += tv to isOn
                 row.addView(tv)
@@ -517,32 +523,73 @@ class OverlayService : Service(), LifecycleOwner {
     // ------------------------------------------------------------- nahrávání v bublině
     private fun toast(t: String) = android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_SHORT).show()
 
+    // Bublina nahrává CELOU obrazovku (hra + Hoppy). Ovládání se při nahrávání samo schová,
+    // ať ho ve videu nemáš; klepnutím na Hoppy se na chvíli ukáže a funguje.
+    private var screen: ScreenRecorder? = null
+    private var projectionGranted = false
+    private fun isRec() = screen?.isRecording == true
+
     /** Spustí/zastaví nahrávání. Jde to z mini panelu, z panelu efektů, z REC štítku i z notifikace. */
     private fun toggleRec() {
-        val r = rec
-        if (r?.isRecording == true) {
-            val ok = r.stop()
-            recTag.visibility = View.GONE
+        if (isRec()) { screen?.stop(); return }
+        // systémový dotaz na záznam obrazovky (průhledná aktivita), výsledek přijde jako ACTION_REC_GRANTED
+        runCatching {
+            startActivity(Intent(this, ScreenCaptureRequestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { toast("Nahrávání nejde spustit: ${it.message}") }
+    }
+
+    private fun startScreenRec(code: Int, data: Intent) {
+        projectionGranted = true
+        // Android 14+: služba musí běžet s typem mediaProjection DŘÍV, než se projekce vytvoří
+        runCatching { startInForeground() }.onFailure { CrashLog.note(this, "fgs projekce", it) }
+        val r = ScreenRecorder(this) { ok ->
+            projectionGranted = false
+            if (::recTag.isInitialized) recTag.visibility = View.GONE
+            showControlsNow(false)
             toast(if (ok) "Uloženo do Movies/HoppyVTuber" else "Nahrávání selhalo")
-        } else {
-            if (!::sceneView.isInitialized) { toast("Hoppy se ještě načítá…"); return }
-            val nr = r ?: SceneRecorder(this, sceneView).also { rec = it }
-            if (nr.start(maxWidth = 1080, minWidth = 720)) {
-                recTag.visibility = View.VISIBLE
-                recTick.run()
-            } else toast("Nahrávání nejde spustit")
+            refreshPad(); updateNotification()
+            runCatching { startInForeground() }
         }
+        if (r.start(code, data)) {
+            screen = r
+            recTag.visibility = View.VISIBLE
+            recTick.run()
+            hideControlsLater()
+            toast("🔴 Nahrává se obrazovka. Klepni na Hoppy pro ovládání.")
+        } else toast("Nahrávání nejde spustit")
         refreshPad(); updateNotification()
     }
 
     private val recTick = object : Runnable {
         override fun run() {
-            val r = rec ?: return
+            val r = screen ?: return
             if (!r.isRecording) return
             recTag.text = "🔴 ${r.timeText()}"
             recTag.postDelayed(this, 500)
         }
     }
+
+    // --- ovládání se při nahrávání schovává
+    private val hideControls = Runnable {
+        if (!isRec()) return@Runnable
+        if (::controls.isInitialized) controls.visibility = View.GONE
+        pad?.visibility = View.GONE
+        root?.let { runCatching { wm.updateViewLayout(it, params) } }
+    }
+
+    /** Při nahrávání: ukázat ovládání (a panel efektů, pokud je otevřený) a za 3 s zase schovat. */
+    private fun showControlsNow(autoHide: Boolean = true) {
+        if (::controls.isInitialized) controls.visibility = View.VISIBLE
+        pad?.visibility = View.VISIBLE
+        if (autoHide) hideControlsLater()
+    }
+
+    private fun hideControlsLater() {
+        mainHandler.removeCallbacks(hideControls)
+        if (isRec()) mainHandler.postDelayed(hideControls, 3000)
+    }
+
+    private val mainHandler by lazy { android.os.Handler(mainLooper) }
 
     // ------------------------------------------------------------- hlas
     private fun startVoice() {
@@ -580,7 +627,8 @@ class OverlayService : Service(), LifecycleOwner {
 
     override fun onDestroy() {
         // rozdělané video vždy uložit
-        rec?.let { if (it.isRecording) { val ok = it.stop(); toast(if (ok) "Video uloženo do Movies/HoppyVTuber" else "Nahrávání selhalo") } }
+        screen?.let { if (it.isRecording) it.stop() }
+        mainHandler.removeCallbacksAndMessages(null)
         onShown = null
         stopped = true
         running = false

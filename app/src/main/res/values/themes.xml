@@ -16,4 +16,11 @@
         <item name="chipMinHeight">44dp</item>
         <item name="android:textSize">14sp</item>
     </style>
+    <style name="Theme.Hoppy.Transparent" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>
