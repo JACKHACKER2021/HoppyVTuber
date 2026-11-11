@@ -39,7 +39,9 @@ Kamera dál sleduje obličej (běží jako služba s notifikací). Hoppy je v **
 - Funguje i na šířku (tracking se otáčí s displejem).
 - Návrat do aplikace (nebo klepnutí na notifikaci) bublinu zavře a postava se vrátí do aplikace.
 - Poloha, velikost, výrazy i kalibrace se pamatují.
-- Chceš to nahrát? Použij systémový záznam obrazovky – bublina bude ve videu nad hrou.
+- **⏺ Nahrávání v bublině**: v mini panelu, v panelu efektů ✨ nebo v notifikaci. Nahrává se jen Hoppy (video 720p+), v okýnku běží 🔴 čas – klepnutím na něj zastavíš. Zastavit jde vždy i z notifikace; při zavření bubliny se video uloží samo.
+- Panel efektů ✨ má všechno: 👋 🙌 😊 😳 + všechny efekty + ⏺.
+- Xiaomi/HyperOS: povol „Zobrazovat vyskakovací okna při běhu na pozadí“ a baterii „Bez omezení“ (aplikace na to jednou upozorní).
 
 ## Jak získat APK
 1. Nahraj obsah složky na GitHub (nový repozitář).

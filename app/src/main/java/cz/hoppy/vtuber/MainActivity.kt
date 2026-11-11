@@ -5,10 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.content.ContentValues
-import android.media.MediaRecorder
-import android.os.SystemClock
-import android.provider.MediaStore
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -260,7 +256,7 @@ class MainActivity : AppCompatActivity() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Bublina potřebuje kameru", Toast.LENGTH_SHORT).show(); return
         }
-        if (Settings.canDrawOverlays(this)) launchBubble()
+        if (Settings.canDrawOverlays(this)) { if (!xiaomiHint()) launchBubble() }
         else {
             Toast.makeText(this, "Povol „Zobrazovat přes jiné aplikace“ pro Hoppy VTuber", Toast.LENGTH_LONG).show()
             overlayPermLauncher.launch(
@@ -269,27 +265,50 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Xiaomi/HyperOS má navíc vlastní povolení pro okna z pozadí – jednou na něj upozorníme. */
+    private fun xiaomiHint(): Boolean {
+        if (!Build.MANUFACTURER.equals("Xiaomi", true) && !Build.BRAND.equals("Redmi", true) && !Build.BRAND.equals("POCO", true)) return false
+        val p = Prefs.get(this)
+        if (p.getBoolean("xiaomiHint", false)) return false
+        p.edit().putBoolean("xiaomiHint", true).apply()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Xiaomi: jedno povolení navíc")
+            .setMessage("Aby se bublina při hraní vždy ukázala, povol v Oprávněních aplikace:\n\n" +
+                    "• „Zobrazovat vyskakovací okna při běhu na pozadí“\n• „Zobrazovat vyskakovací okna“\n\n" +
+                    "a v Baterii nastav „Bez omezení“.")
+            .setPositiveButton("Otevřít nastavení") { _, _ ->
+                val miui = Intent("miui.intent.action.APP_PERM_EDITOR").putExtra("extra_pkgname", packageName)
+                runCatching { startActivity(miui) }.onFailure {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                }
+            }
+            .setNegativeButton("Spustit bublinu") { _, _ -> launchBubble() }
+            .show()
+        return true
+    }
+
     private fun launchBubble() {
         tracker.stop()                     // kameru převezme bublina
         avatar.saveExpressions()
+        if (recording) stopSceneRecording()
+        // aplikaci zavřeme, až bude okno bubliny na obrazovce (dokud je aplikace vpředu, Xiaomi okno nezablokuje).
+        // Pak běží jen jeden 3D engine naráz.
+        var done = false
+        val close = { if (!done) { done = true; runOnUiThread { if (!isFinishing) finish() } } }
+        OverlayService.onShown = close
         ContextCompat.startForegroundService(this, Intent(this, OverlayService::class.java))
-        // aplikaci zavřeme úplně: jen jeden 3D engine naráz (dva najednou na některých GPU padají)
-        finish()
+        sceneView.postDelayed({ close() }, 2500)   // pojistka
         Toast.makeText(this, "Hoppy je v bublině – táhni ji, klepnutím ovládání", Toast.LENGTH_LONG).show()
     }
 
     // ---------------------------------------------------------------- nahrávání
-    // ---------------------------------------------------------------- nahrávání
     // Nahrává se přímo 3D scéna (ne celá obrazovka) – tlačítka jsou vidět a fungují, ale ve videu nejsou.
-    private var recorder: MediaRecorder? = null
-    private var recUri: android.net.Uri? = null
-    private var recPfd: android.os.ParcelFileDescriptor? = null
-    private var recStart = 0L
+    private var rec: SceneRecorder? = null
     private val recTick = object : Runnable {
         override fun run() {
-            if (!recording) return
-            val sec = (SystemClock.elapsedRealtime() - recStart) / 1000
-            findViewById<TextView>(R.id.recBadge).text = "🔴 REC  %02d:%02d".format(sec / 60, sec % 60)
+            val r = rec ?: return
+            if (!r.isRecording) return
+            findViewById<TextView>(R.id.recBadge).text = "🔴 REC  ${r.timeText()}"
             sceneView.postDelayed(this, 500)
         }
     }
@@ -297,57 +316,13 @@ class MainActivity : AppCompatActivity() {
     private fun toggleRecording() { if (recording) stopSceneRecording() else startSceneRecording() }
 
     private fun startSceneRecording() {
-        // video = velikost scény, max 1080 na šířku, sudé rozměry (kodek)
-        val k = minOf(1f, 1080f / sceneView.width.coerceAtLeast(1))
-        val w = ((sceneView.width * k).toInt() / 2) * 2
-        val h = ((sceneView.height * k).toInt() / 2) * 2
-        if (w < 16 || h < 16) return
-        val withAudio = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        try {
-            val values = ContentValues().apply {
-                put(MediaStore.Video.Media.DISPLAY_NAME, "hoppy_${System.currentTimeMillis()}.mp4")
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/HoppyVTuber")
-            }
-            val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)!!
-            val pfd = contentResolver.openFileDescriptor(uri, "w")!!
-            val r = (if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()).apply {
-                if (withAudio) setAudioSource(MediaRecorder.AudioSource.MIC)
-                setVideoSource(MediaRecorder.VideoSource.SURFACE)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setOutputFile(pfd.fileDescriptor)
-                setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-                setVideoSize(w, h)
-                setVideoFrameRate(30)
-                setVideoEncodingBitRate(8_000_000)
-                if (withAudio) {
-                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                    setAudioEncodingBitRate(128_000); setAudioSamplingRate(44100)
-                }
-                prepare()
-                start()
-            }
-            sceneView.startMirroring(r.surface, 0, 0, w, h)
-            recorder = r; recUri = uri; recPfd = pfd
-            recStart = SystemClock.elapsedRealtime()
-            setRecordingUi(true)
-        } catch (e: Exception) {
-            CrashLog.note(this, "nahrávání start", e)
-            Toast.makeText(this, "Nahrávání nejde spustit: ${e.message}", Toast.LENGTH_LONG).show()
-            recorder?.release(); recorder = null
-            recUri?.let { runCatching { contentResolver.delete(it, null, null) } }; recUri = null
-        }
+        val r = rec ?: SceneRecorder(this, sceneView).also { rec = it }
+        if (r.start(maxWidth = 1080, minWidth = 16)) setRecordingUi(true)
+        else Toast.makeText(this, "Nahrávání nejde spustit", Toast.LENGTH_LONG).show()
     }
 
     private fun stopSceneRecording() {
-        val r = recorder ?: return
-        recorder = null
-        runCatching { sceneView.stopMirroring(r.surface) }
-        val ok = runCatching { r.stop() }.isSuccess
-        r.release()
-        runCatching { recPfd?.close() }; recPfd = null
-        if (!ok) recUri?.let { runCatching { contentResolver.delete(it, null, null) } }
-        recUri = null
+        val ok = rec?.stop() ?: return
         setRecordingUi(false)
         Toast.makeText(this, if (ok) "Uloženo do Movies/HoppyVTuber" else "Nahrávání selhalo", Toast.LENGTH_LONG).show()
     }
