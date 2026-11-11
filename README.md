@@ -18,6 +18,12 @@ Rekvizity (mrkev, srdíčka, hvězdičky, kapky, teploměr…) jsou v `app/src/m
 ## 🐰 Pohyb jako v originále
 Postava pořád hraje animaci **Idle** z modelu (houpání uší, ocásku a těla). 👋 Mávat a 😊 Radost spouští animace **Wave** a **Happy** z modelu (plynulé prolnutí). Uši a ocásek jsou navíc **pružné**: dobíhají a houpou se, když hneš hlavou. Ladění: `EAR_FLOP`, `EAR_STIFF`, `EAR_DAMP`, `TAIL_WAG`, `BODY_FOLLOW` v `HoppyAvatar.kt`.
 
+## 👕 Oblečky a 🎧 sluchátka
+**👕** v aplikaci (i v bublině) přepíná: Bez oblečku → 📅 Podle data → 🎄 Vánoce → 🥂 Silvestr → 🎃 Halloween → 🎂 Narozeniny.
+**📅 Podle data** obleče Hoppy samo: Vánoce 1.–26. 12., Silvestr 31. 12.–1. 1., Halloween 24. 10.–1. 11., Narozeniny v den, který nastavíš **dlouhým stiskem 👕**.
+**🎧 Sluchátka** (gaming headset s mikrofonem) jdou zapnout zvlášť a kombinovat s oblečkem.
+Oblečky jsou v `app/src/main/assets/models/outfits/` (stejná kostra jako Hoppy – hýbou se s ní, i s efekty). Normály opravuje `tools/fix_normals.py`.
+
 ## 🖼️ Vlastní pozadí
 **🖼️ Vlastní pozadí** → vyber obrázek z galerie. Vyplní celý záběr (i v bublině). **🎨 Pozadí** přepne zpět na barvy; v bublině 🎨 projde barvy a pak tvůj obrázek.
 

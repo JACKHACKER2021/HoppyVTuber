@@ -78,6 +78,8 @@ class HoppyAvatar(
     private var modelNode: ModelNode? = null
     val effects = Effects(sceneView)
     private val pose = FxPose()
+    /** Oblečky a sluchátka (null, dokud se nenačte model). */
+    var wardrobe: Wardrobe? = null; private set
 
     private class Bone(val entity: Int, val base: FloatArray, val shown: FloatArray)
     private val bones = HashMap<String, Bone>()
@@ -133,6 +135,9 @@ class HoppyAvatar(
         }
         bones["Face_BlushLeft"]?.shown?.let { placeBlush(it, 1f) }
         bones["Face_BlushRight"]?.shown?.let { placeBlush(it, -1f) }
+        val all = HashMap<String, Int>()
+        for (n in Wardrobe.BONES) asset.getFirstEntityByName(n).takeIf { it != 0 }?.let { all[n] = it }
+        wardrobe = Wardrobe(sceneView, node, all)
         instance.animator.let { a ->
             for (i in 0 until a.animationCount) anim[a.getAnimationName(i)] = i
         }
@@ -314,6 +319,7 @@ class HoppyAvatar(
         face("Face_BlushLeft", blush); face("Face_BlushRight", blush)
 
         a.updateBoneMatrices()
+        wardrobe?.sync()
     }
 
     // ------------------------------------------------------------- vlastní pozadí
@@ -350,6 +356,12 @@ class HoppyAvatar(
         armsOn = p.getBoolean("arms", false); waveOn = p.getBoolean("wave", false)
         happyOn = p.getBoolean("happy", false); blushOn = p.getBoolean("blush", false)
         faceCam = p.getBoolean("faceCam", true)
+        wardrobe?.let { w ->
+            val o = runCatching { Outfit.valueOf(p.getString("outfit", "AUTO")!!) }.getOrDefault(Outfit.AUTO)
+            if (w.outfit != o) w.setOutfit(o)
+            val hs = p.getBoolean("headset", false)
+            if (w.headset != hs) w.setHeadset(hs)
+        }
     }
 
     fun saveExpressions() {
@@ -357,6 +369,7 @@ class HoppyAvatar(
             .putBoolean("arms", armsOn).putBoolean("wave", waveOn)
             .putBoolean("happy", happyOn).putBoolean("blush", blushOn)
             .putBoolean("faceCam", faceCam)
+            .apply { wardrobe?.let { putString("outfit", it.outfit.name); putBoolean("headset", it.headset) } }
             .apply()
     }
 }

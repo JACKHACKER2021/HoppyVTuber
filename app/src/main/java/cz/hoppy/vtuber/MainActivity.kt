@@ -222,6 +222,17 @@ class MainActivity : AppCompatActivity() {
         findViewById<Chip>(R.id.chipFaceCam).setOnCheckedChangeListener { _, c ->
             avatar.faceCam = c; avatar.saveExpressions(); reframe()
         }
+        // šatník: 👕 projde oblečky (i „Podle data“), dlouhý stisk = nastavit narozeniny
+        findViewById<Chip>(R.id.chipOutfit).setOnClickListener {
+            val w = avatar.wardrobe ?: return@setOnClickListener
+            val all = Outfit.values()
+            w.setOutfit(all[(w.outfit.ordinal + 1) % all.size])
+            avatar.saveExpressions(); updateOutfitChip()
+        }
+        findViewById<Chip>(R.id.chipOutfit).setOnLongClickListener { pickBirthday(); true }
+        findViewById<Chip>(R.id.chipHeadset).setOnCheckedChangeListener { _, c ->
+            avatar.wardrobe?.setHeadset(c); avatar.saveExpressions()
+        }
         findViewById<Chip>(R.id.chipBubble).setOnClickListener { startBubble() }
         findViewById<Chip>(R.id.chipBubble).setOnLongClickListener {
             Prefs.get(this).edit().remove("bubbleX").remove("bubbleY").remove("padX").remove("padY").apply()
@@ -232,6 +243,28 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<ExtendedFloatingActionButton>(R.id.btnRec).setOnClickListener { toggleRecording() }
         // klepnutí na postavu během nahrávání schová/ukáže panel
+    }
+
+    private fun updateOutfitChip() {
+        val w = avatar.wardrobe ?: return
+        val eff = w.effective(this)
+        findViewById<Chip>(R.id.chipOutfit).text =
+            if (w.outfit == Outfit.AUTO) "📅 Podle data: ${eff.emoji}${if (eff == Outfit.NONE) " nic" else ""}"
+            else "${w.outfit.emoji} ${w.outfit.label}"
+    }
+
+    private fun pickBirthday() {
+        val p = Prefs.get(this)
+        val now = java.util.Calendar.getInstance()
+        android.app.DatePickerDialog(this, { _, _, month, day ->
+            p.edit().putInt("birthMonth", month + 1).putInt("birthDay", day).apply()
+            avatar.wardrobe?.let { it.setOutfit(it.outfit) }   // přepočítat „Podle data“
+            updateOutfitChip()
+            Toast.makeText(this, "Narozeniny: $day. ${month + 1}. – ten den bude Hoppy v 🎂 oblečku", Toast.LENGTH_LONG).show()
+        }, now.get(java.util.Calendar.YEAR), (p.getInt("birthMonth", now.get(java.util.Calendar.MONTH) + 1)) - 1,
+            p.getInt("birthDay", now.get(java.util.Calendar.DAY_OF_MONTH))).apply {
+            setTitle("Kdy má Hoppy narozeniny?")
+        }.show()
     }
 
     /** Výrazy mohla změnit bublina – promítnout je do čipů. */
@@ -245,6 +278,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Chip>(R.id.chipHappy).isChecked = happy
         findViewById<Chip>(R.id.chipBlush).isChecked = blush
         findViewById<Chip>(R.id.chipFaceCam).isChecked = face
+        findViewById<Chip>(R.id.chipHeadset).isChecked = a.wardrobe?.headset == true
+        updateOutfitChip()
         reframe()
     }
 

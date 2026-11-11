@@ -323,6 +323,14 @@ class OverlayService : Service(), LifecycleOwner {
         button("😊", { a.happyOn }) { a.happyOn = !a.happyOn }
         button("😳", { a.blushOn }) { a.blushOn = !a.blushOn }
         button("👤", { a.faceCam }) { a.faceCam = !a.faceCam; resizeFrame() }
+        button("👕", null) {
+            val w = a.wardrobe ?: return@button
+            val all = Outfit.values()
+            w.setOutfit(all[(w.outfit.ordinal + 1) % all.size])
+            val eff = w.effective(this)
+            toast(if (w.outfit == Outfit.AUTO) "📅 Podle data: ${eff.emoji} ${eff.label}" else "${w.outfit.emoji} ${w.outfit.label}")
+        }
+        button("🎧", { a.wardrobe?.headset == true }) { a.wardrobe?.let { it.setHeadset(!it.headset) } }
         button("🎙", { voice != null }) {
             val on = voice == null
             if (on && !VoiceChanger.isConfigured(this)) return@button
