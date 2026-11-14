@@ -10,6 +10,14 @@ Nahrává se jen 3D scéna s postavou: tlačítka (emoce, efekty…) zůstávaj�
 - **Úsměv**: velký úsměv = šťastné zavřené oči (jako 😊 Radost).
 - **Mrkání** a **😳 Blush** (na tvářích pod očima).
 
+## 🐰 Hoppy Mazlíček (druhá hra)
+Druhá ikona na ploše **Hoppy Mazlíček**. Stejná postava, animace, efekty a oblečky, ale bez kamery – Hoppy žije sama.
+- Potřeby: 🥕 hlad, 🚽 záchod, 🛁 čistota, 💤 energie, 🎾 zábava. Klesají i při zavřené aplikaci; když něco potřebuje, přijde notifikace.
+- Když je potřeba nízko, Hoppy to ukáže: přešlapuje (záchod), svěsí uši (hlad), zívá (únava), létají kolem ní mušky (špína).
+- Tlačítka: Nakrmit, Umýt (bubliny), Záchod, Spát/Vzbudit (tma, energie se doplní za ~30 min), Hrát, Obleček.
+- Dotyk: hlazení po hlavě = srdíčka; lechtání na bříšku a tlapkách = směje se, červená a říká „Přestaň!". Dívá se za prstem.
+- Kód: `PetActivity.kt`, `PetState.kt` (rychlosti potřeb nahoře).
+
 ## ✨ Efekty (vlastní 3D modely)
 Druhá řada tlačítek v aplikaci, v bublině tlačítko **✨** otevře samostatný plovoucí panel efektů (přesuneš ho za ⠿ a mačkáš vedle hry):
 🤧 Kýchnutí · 🤩 Nadšení · 🤒 Nemocná (přepínač) · 🥕 Mrkvička · 🤮 Zvracení · 😍 Zamilovaná · 🩸 Krev z nosu · 🥺 UwU

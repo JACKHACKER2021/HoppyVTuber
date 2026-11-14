@@ -27,24 +27,31 @@ import kotlin.math.atan2
  * Přední kamera -> MediaPipe FaceLandmarker -> natočení hlavy, mrkání, pusa.
  * Používá ji jak MainActivity, tak plovoucí bublina (OverlayService).
  */
-class FaceTracker(private val context: Context) {
+/** Odkud postava bere natočení hlavy a výraz: kamera (FaceTracker) nebo „mozek" mazlíčka. */
+interface FaceSource {
+    val yaw: Float; val pitch: Float; val roll: Float
+    val offYaw: Float; val offPitch: Float; val offRoll: Float
+    val blinkL: Float; val blinkR: Float; val jaw: Float; val smile: Float
+}
+
+class FaceTracker(private val context: Context) : FaceSource {
 
     // surová data z trackingu (zapisuje analyzer vlákno)
-    @Volatile var yaw = 0f; private set
-    @Volatile var pitch = 0f; private set
-    @Volatile var roll = 0f; private set
-    @Volatile var blinkL = 0f; private set
-    @Volatile var blinkR = 0f; private set
-    @Volatile var jaw = 0f; private set
+    @Volatile override var yaw = 0f; private set
+    @Volatile override var pitch = 0f; private set
+    @Volatile override var roll = 0f; private set
+    @Volatile override var blinkL = 0f; private set
+    @Volatile override var blinkR = 0f; private set
+    @Volatile override var jaw = 0f; private set
     @Volatile private var smileL = 0f
     @Volatile private var smileR = 0f
-    val smile get() = (smileL + smileR) / 2f
+    override val smile get() = (smileL + smileR) / 2f
     @Volatile var seenAt = 0L; private set
 
     // kalibrace (sdílená přes Prefs, ať platí i v bublině)
-    var offYaw = Prefs.get(context).getFloat("offYaw", 0f); private set
-    var offPitch = Prefs.get(context).getFloat("offPitch", 0f); private set
-    var offRoll = Prefs.get(context).getFloat("offRoll", 0f); private set
+    override var offYaw = Prefs.get(context).getFloat("offYaw", 0f); private set
+    override var offPitch = Prefs.get(context).getFloat("offPitch", 0f); private set
+    override var offRoll = Prefs.get(context).getFloat("offRoll", 0f); private set
 
     val faceVisible get() = SystemClock.uptimeMillis() - seenAt < 700
 

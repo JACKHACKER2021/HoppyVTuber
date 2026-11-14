@@ -93,6 +93,8 @@ class Effects(private val sceneView: SceneView) {
     private val hearts = Pool("heart_pink", 12)
     private val carrot = Pool("carrot", 1)
     private val thermo = Pool("thermometer", 1)
+    private val fly = Pool("fly", 6)
+    private val bubble = Pool("bubble", 16)
 
     private val particles = ArrayList<Particle>()
 
@@ -115,7 +117,26 @@ class Effects(private val sceneView: SceneView) {
 
     // ------------------------------------------------------------- snímek
     /** [head] = světová matice hlavy, [t] = čas v s, [dt] = krok. Vyplní [pose]. */
+    private var lastHead: FloatArray? = null
+
+    /** Jednotlivé částice pro mazlíčka: "hearts", "bubble", "fly", "sweat". */
+    fun emit(kind: String) {
+        val h = lastHead ?: return
+        when (kind) {
+            "hearts" -> floatHeart(h)
+            "bubble" -> spawn(bubble, h, rnd.f(-0.28f, 0.28f), rnd.f(-0.7f, 0.25f), rnd.f(0.08f, 0.22f),
+                vx = rnd.f(-0.05f, 0.05f), vy = rnd.f(0.12f, 0.3f), vz = 0f,
+                gravity = 0f, drag = 0.3f, life = 1.6f, size = rnd.f(0.6f, 1.5f), grow = 0.3f)
+            "fly" -> spawn(fly, h, rnd.f(-0.3f, 0.3f), rnd.f(-0.3f, 0.35f), 0.18f,
+                vx = rnd.f(-0.5f, 0.5f), vy = rnd.f(-0.35f, 0.35f), vz = 0f,
+                gravity = 0f, drag = 0f, life = 1.1f, size = 1f, grow = 0f)
+            "sweat" -> spawn(sweat, h, 0.15f, 0.2f, 0.09f, vx = 0.02f, vy = -0.05f, vz = 0f,
+                gravity = 0.9f, drag = 0.4f, life = 1.4f, size = 1f, grow = 0f)
+        }
+    }
+
     fun update(t: Float, dt: Float, head: FloatArray, pose: FxPose) {
+        lastHead = head
         val fx = active
         if (fx != null) {
             val u = t - startT

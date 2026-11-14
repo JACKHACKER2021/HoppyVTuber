@@ -24,7 +24,7 @@ import kotlin.math.sqrt
  */
 class HoppyAvatar(
     private val sceneView: SceneView,
-    private val tracker: FaceTracker,
+    private val tracker: FaceSource,
     modelUnits: Float = MODEL_UNITS,
 ) {
     companion object {
@@ -78,6 +78,16 @@ class HoppyAvatar(
     private var modelNode: ModelNode? = null
     val effects = Effects(sceneView)
     private val pose = FxPose()
+    /** Mazlíček: úprava pózy každý snímek (po efektech). */
+    var poseHook: ((FxPose, Float) -> Unit)? = null
+
+    /** Bod na obrazovce -> [x, y] ve světě (rovina postavy). Pro dotyky. */
+    fun worldAt(px: Float, py: Float): FloatArray? {
+        val f = lastFrame ?: return null
+        val w = sceneView.width; val h = sceneView.height
+        if (w <= 0 || h <= 0) return null
+        return floatArrayOf((px / w - 0.5f) * f[2] * f[3], f[0] + (0.5f - py / h) * f[2])
+    }
     /** Oblečky a sluchátka (null, dokud se nenačte model). */
     var wardrobe: Wardrobe? = null; private set
 
@@ -238,6 +248,7 @@ class HoppyAvatar(
         bones["Head"]?.let { tm.getWorldTransform(tm.getInstance(it.entity), headW) }
         try { effects.update(t, dt, headW, pose) }
         catch (e: Exception) { CrashLog.note(sceneView.context, "efekt", e); effects.stop(); pose.reset() }
+        poseHook?.invoke(pose, t)
 
         // --- 1) animace z modelu: vše na výchozí pózu, pak Idle, Wave / Happy prolnuté
         for ((_, b) in bones) tm.setTransform(tm.getInstance(b.entity), b.base)

@@ -55,6 +55,22 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
+        <!-- druhá hra: virtuální mazlíček (vlastní ikona na ploše) -->
+        <activity
+            android:name=".PetActivity"
+            android:exported="true"
+            android:label="Hoppy Mazlíček"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:taskAffinity="cz.hoppy.vtuber.pet">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <receiver android:name=".PetReminder" android:exported="false" />
+
     </application>
 
 </manifest>

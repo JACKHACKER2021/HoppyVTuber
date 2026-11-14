@@ -31,6 +31,8 @@ import io.github.sceneview.SceneView
  */
 class MainActivity : AppCompatActivity() {
 
+    companion object { var current: java.lang.ref.WeakReference<MainActivity>? = null }
+
     private val BACKGROUNDS = Prefs.BACKGROUNDS
     private var voice: VoiceChanger? = null
     private var bgIndex = 0
@@ -64,7 +66,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (OverlayService.running) {
+        current = java.lang.ref.WeakReference(this)
+        val pet = PetActivity.current?.get()?.takeIf { !it.isDestroyed }
+        pet?.finish()
+        if (OverlayService.running || pet != null) {
             // nejdřív zavřít bublinu a počkat, až zmizí její 3D engine (jen jeden engine naráz)
             startService(Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_STOP))
             android.os.Handler(mainLooper).postDelayed({ if (!isFinishing && !isDestroyed) build() }, 700)

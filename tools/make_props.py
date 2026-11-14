@@ -140,6 +140,8 @@ if __name__ == "__main__":
     write_glb("blob_vomit", [(sphere(0.016, 0.85), (0.62, 0.55, 0.05, 1))])
     write_glb("crumb", [(sphere(0.007, 0.8, 0, 6, 4), (1.0, 0.55, 0.1, 1))])
     write_glb("puff", [(sphere(0.013, 1.0, 0, 8, 6), (0.92, 0.97, 1.0, 0.8))])
+    write_glb("fly", [(sphere(0.007, 1.0, 0, 6, 4), (0.12, 0.1, 0.1, 1))])
+    write_glb("bubble", [(sphere(0.02, 1.0, 0, 10, 8), (0.7, 0.9, 1.0, 0.55))])
     # teploměr: tyčinka podél +Z (ven z pusy), červená baňka na konci
     stick = lathe([(0.0001, 0.0), (0.0055, 0.002), (0.0055, 0.12), (0.0001, 0.122)], 10)
     stick = ([(x, z, y) for x, y, z in stick[0]], [(x, z, y) for x, y, z in stick[1]], stick[2])
