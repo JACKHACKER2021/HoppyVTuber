@@ -37,10 +37,11 @@ class FxPose {
     var wag = 0f                                   // extra vrtění ocáskem (-1 líné .. 1 divoké)
     var earDroop = 0f                              // 0..1 svěšené uši
     var kick = 0f                                  // náraz pro pružiny uší (jednorázově)
+    var hug = 0f                                   // 0..1 packy na bříško (lechtání)
 
     fun reset() {
         pitch = 0f; yaw = 0f; roll = 0f; lift = 0f; arms = 0f
-        eyes = Eyes.AUTO; squint = 1f; mouth = -1f; blush = false; wag = 0f; earDroop = 0f; kick = 0f
+        eyes = Eyes.AUTO; squint = 1f; mouth = -1f; blush = false; wag = 0f; earDroop = 0f; kick = 0f; hug = 0f
     }
 }
 

@@ -214,6 +214,7 @@ class PetActivity : AppCompatActivity(), FaceSource {
             t < tickleUntil -> {
                 p.eyes = Eyes.CLOSED; p.blush = true; p.wag = 1f
                 p.mouth = 0.6f + 0.4f * abs(sin(t * 12f)); p.roll = sin(t * 14f) * 7f; p.lift = abs(sin(t * 12f)) * 0.015f
+                p.hug = 1f      // chytne se packami za bříško
             }
             t < petUntil -> { p.eyes = Eyes.CLOSED; p.blush = true; p.wag = 0.8f; p.pitch = 6f; p.mouth = 0f }
             state.sleeping -> {
@@ -254,7 +255,7 @@ class PetActivity : AppCompatActivity(), FaceSource {
                 if (t > sayUntil) say(listOf("To je příjemné 💚", "Ještě! 🥰", "Mám tě ráda!")[lastPhrase++ % 3], 2f)
             }
             // bříško a tlapky: lechtání
-            (w[1] in 0.5f..0.85f && abs(w[0]) < 0.2f) || w[1] < 0.2f -> if (moving) {
+            (w[1] in 0.6f..0.85f && abs(w[0]) < 0.2f) || w[1] < 0.2f -> if (moving) {
                 tickleUntil = t + 1.2f
                 state.fun_ = (state.fun_ + 0.2f).coerceAtMost(100f)
                 if (t > sayUntil) say(listOf("Hihi! To lechtá! 😆", "Přestaň, hahaha! 😳", "Néé, tam jsem lechtivá! 🤣")[lastPhrase++ % 3], 1.6f)

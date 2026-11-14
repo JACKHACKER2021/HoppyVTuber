@@ -13,8 +13,8 @@ android {
         applicationId = "cz.hoppy.vtuber"
         minSdk = 26
         targetSdk = 34
-        versionCode = 19
-        versionName = "3.0.0"
+        versionCode = 20
+        versionName = "3.0.1"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

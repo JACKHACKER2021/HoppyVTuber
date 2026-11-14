@@ -15,7 +15,7 @@ Druhá ikona na ploše **Hoppy Mazlíček**. Stejná postava, animace, efekty a 
 - Potřeby: 🥕 hlad, 🚽 záchod, 🛁 čistota, 💤 energie, 🎾 zábava. Klesají i při zavřené aplikaci; když něco potřebuje, přijde notifikace.
 - Když je potřeba nízko, Hoppy to ukáže: přešlapuje (záchod), svěsí uši (hlad), zívá (únava), létají kolem ní mušky (špína).
 - Tlačítka: Nakrmit, Umýt (bubliny), Záchod, Spát/Vzbudit (tma, energie se doplní za ~30 min), Hrát, Obleček.
-- Dotyk: hlazení po hlavě = srdíčka; lechtání na bříšku a tlapkách = směje se, červená a říká „Přestaň!". Dívá se za prstem.
+- Dotyk: hlazení po hlavě = srdíčka; lechtání na bříšku a tlapkách = směje se, červená, chytne se packami za bříško a říká „Přestaň!". Dívá se za prstem.
 - Kód: `PetActivity.kt`, `PetState.kt` (rychlosti potřeb nahoře).
 
 ## ✨ Efekty (vlastní 3D modely)

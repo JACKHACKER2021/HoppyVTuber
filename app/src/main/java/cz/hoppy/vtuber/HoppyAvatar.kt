@@ -101,6 +101,7 @@ class HoppyAvatar(
     private var armsAmt = 0f; private var waveAmt = 0f; private var happyAmt = 0f
     private var pYaw = 0f; private var pPitch = 0f; private var pRoll = 0f
     private var lastT = -1f
+    private var hugAmt = 0f
 
     // pružiny [úhel, rychlost]
     private val earRoll = FloatArray(2); private val earPitch = FloatArray(2); private val tailSwing = FloatArray(2)
@@ -291,6 +292,15 @@ class HoppyAvatar(
         if (armsAmt > 0.01f) {
             addRot("LeftUpperArm", 0f, 0f, ARM_DEG * armsAmt)
             addRot("RightUpperArm", 0f, 0f, -ARM_DEG * armsAmt)
+        }
+
+        // packy na bříško (lechtání) – plynule
+        hugAmt = lerp(hugAmt, pose.hug, 0.18f)
+        if (hugAmt > 0.01f) {
+            addRot("LeftUpperArm", -28f * hugAmt, 0f, -30f * hugAmt)
+            addRot("RightUpperArm", -28f * hugAmt, 0f, 30f * hugAmt)
+            addRot("LeftLowerArm", -40f * hugAmt, 0f, 0f)
+            addRot("RightLowerArm", -40f * hugAmt, 0f, 0f)
         }
 
         // --- 5) obličej (animace ho přepsaly, nastavujeme každý snímek)
