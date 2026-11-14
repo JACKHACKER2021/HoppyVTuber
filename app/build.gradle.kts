@@ -33,8 +33,8 @@ android {
         create("pet") {
             dimension = "app"
             applicationId = "cz.hoppy.pet"
-            versionCode = 1
-            versionName = "1.0.1"
+            versionCode = 2
+            versionName = "1.0.2"
             resValue("string", "app_name", "Hoppy Mazlíček")
         }
     }

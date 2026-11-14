@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hoppy Mazlíček: šťastná hlava (zavřená očka ^^), blush, srdíčko a mrkvička -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- uši -->
+    <path android:fillColor="#5BD07A" android:pathData="M40,22 C36,22 33,32 35,46 L45,46 C46,32 44,22 40,22 Z" />
+    <path android:fillColor="#A8F5B8" android:pathData="M40,26 C38,26 36,33 37,43 L43,43 C44,33 42,26 40,26 Z" />
+    <path android:fillColor="#5BD07A" android:pathData="M68,22 C72,22 75,32 73,46 L63,46 C62,32 64,22 68,22 Z" />
+    <path android:fillColor="#A8F5B8" android:pathData="M68,26 C70,26 72,33 71,43 L65,43 C64,33 66,26 68,26 Z" />
+    <!-- hlava -->
+    <path android:fillColor="#5BD07A" android:pathData="M54,40 C38,40 29,50 29,66 C29,80 41,86 54,86 C67,86 79,80 79,66 C79,50 70,40 54,40 Z" />
+    <!-- šťastná očka ^^ -->
+    <path android:strokeColor="#06240F" android:strokeWidth="2.6" android:strokeLineCap="round"
+        android:pathData="M39,63 Q44,57 49,63 M59,63 Q64,57 69,63" />
+    <!-- blush -->
+    <path android:fillColor="#FF8FA8" android:pathData="M38,70 A4.5,2.6 0 1,1 38,69.9 Z" />
+    <path android:fillColor="#FF8FA8" android:pathData="M70,70 A4.5,2.6 0 1,1 70,69.9 Z" />
+    <!-- nosík a pusinka :3 -->
+    <path android:fillColor="#06240F" android:pathData="M54,70 L51.5,67 L56.5,67 Z" />
+    <path android:strokeColor="#06240F" android:strokeWidth="1.8" android:strokeLineCap="round"
+        android:pathData="M49,72 Q51.5,75 54,72 Q56.5,75 59,72" />
+    <!-- srdíčko -->
+    <path android:fillColor="#FF4D6D"
+        android:pathData="M80,34 C80,30 75,29 74,33 C73,29 68,30 68,34 C68,38 74,41 74,42 C74,41 80,38 80,34 Z" />
+    <!-- mrkvička -->
+    <path android:fillColor="#FF8C1E" android:pathData="M36,76 L47,72 L40,87 Z" />
+    <path android:fillColor="#4CAF50" android:pathData="M45,72 L47,65 L47.5,72.5 L53,68 L48,75 Z" />
+</vector>
