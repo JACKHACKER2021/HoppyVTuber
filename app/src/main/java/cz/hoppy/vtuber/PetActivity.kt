@@ -50,6 +50,7 @@ class PetActivity : AppCompatActivity(), FaceSource {
     private val ui = Handler(android.os.Looper.getMainLooper())
     private var ready = false
     private var skybox: Skybox? = null
+    private var roomNight: Boolean? = null
 
     private lateinit var speech: TextView
     private lateinit var panel: View
@@ -183,6 +184,11 @@ class PetActivity : AppCompatActivity(), FaceSource {
         skybox = Skybox.Builder().color(c[0], c[1], c[2], 1f).build(engine)
         sceneView.scene.skybox = skybox
         old?.let { runCatching { engine.destroySkybox(it) } }
+        // vlastní pokojíček (den / noc) – jiný než pozadí ve VTuberovi
+        if (roomNight != state.sleeping) {
+            roomNight = state.sleeping
+            runCatching { avatar.setBackdrop(PetRoom.draw(state.sleeping)) }.onFailure { CrashLog.note(this, "pokoj", it) }
+        }
         sleepBtn.text = if (state.sleeping) "☀️ Vzbudit" else "💤 Spát"
     }
 

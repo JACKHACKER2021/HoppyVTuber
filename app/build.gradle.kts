@@ -13,11 +13,29 @@ android {
         applicationId = "cz.hoppy.vtuber"
         minSdk = 26
         targetSdk = 34
-        versionCode = 20
-        versionName = "3.0.1"
+        versionCode = 21
+        versionName = "3.1.0"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+    }
+
+    // Dvě samostatné aplikace ze stejného kódu (postava, efekty, oblečky jsou sdílené):
+    //  vtuber = Hoppy VTuber (cz.hoppy.vtuber), pet = Hoppy Mazlíček (cz.hoppy.pet)
+    flavorDimensions += "app"
+    productFlavors {
+        create("vtuber") {
+            dimension = "app"
+            applicationId = "cz.hoppy.vtuber"
+            resValue("string", "app_name", "Hoppy VTuber")
+        }
+        create("pet") {
+            dimension = "app"
+            applicationId = "cz.hoppy.pet"
+            versionCode = 1
+            versionName = "1.0.1"
+            resValue("string", "app_name", "Hoppy Mazlíček")
         }
     }
 

@@ -11,7 +11,8 @@ Nahrává se jen 3D scéna s postavou: tlačítka (emoce, efekty…) zůstávaj�
 - **Mrkání** a **😳 Blush** (na tvářích pod očima).
 
 ## 🐰 Hoppy Mazlíček (druhá hra)
-Druhá ikona na ploše **Hoppy Mazlíček**. Stejná postava, animace, efekty a oblečky, ale bez kamery – Hoppy žije sama.
+Samostatná aplikace **Hoppy Mazlíček** (vlastní APK `HoppyMazlicek.apk`, balíček `cz.hoppy.pet`). Sdílí kód s VTuberem (postava, animace, efekty, oblečky), ale je to jiná aplikace – bez kamery, Hoppy žije sama ve svém pokojíčku (den/noc).
+Build: `gradle assembleVtuberRelease assemblePetRelease` (varianty `vtuber` a `pet`).
 - Potřeby: 🥕 hlad, 🚽 záchod, 🛁 čistota, 💤 energie, 🎾 zábava. Klesají i při zavřené aplikaci; když něco potřebuje, přijde notifikace.
 - Když je potřeba nízko, Hoppy to ukáže: přešlapuje (záchod), svěsí uši (hlad), zívá (únava), létají kolem ní mušky (špína).
 - Tlačítka: Nakrmit, Umýt (bubliny), Záchod, Spát/Vzbudit (tma, energie se doplní za ~30 min), Hrát, Obleček.
